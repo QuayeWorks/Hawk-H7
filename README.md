@@ -84,7 +84,7 @@ Disclaimer: The QuayeWorks Hawk-H7 hardware and software are intended solely for
 
 MIT License
 
-Copyright (c) [YEAR] QuayeWorks
+Copyright (c) 2025 QuayeWorks
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
