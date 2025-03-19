@@ -1,32 +1,32 @@
 QuayeWorks Hawk-H7 Multicopter Flight Controller & AI Vision Board
 
-Unlock Next-Level Drone Performance
+**Unlock Next-Level Drone Performance**
 
 Take your drone projects from standard to exceptional with the QuayeWorks Hawk-H7. Specially engineered for quadcopters to octocopters, this advanced flight controller board delivers powerful stabilization, robust sensor integration, and built-in machine learning capabilities. Whether you’re designing for FPV racing, aerial photography, research, or autonomous flight, the Hawk-H7 is your versatile solution.
 
-Key Features & Benefits:
+**Key Features & Benefits:**
 
-  Advanced Flight Control:
+  **Advanced Flight Control:**
   
   - ARM Cortex®-M7 STM32H743 MCU (400 MHz) for unmatched real-time performance.
     
   - Supports precise stabilization and autonomous flight functions.
 
-  Built-in AI & Machine Learning:
+  **Built-in AI & Machine Learning:**
   
   - On-board processing power for real-time object detection, recognition, and tracking (humans, vehicles, landmarks, etc.).
 
-  Comprehensive FPV System:
+  **Comprehensive FPV System:**
   
   - Integrated AT7456E On-Screen Display (OSD) with dedicated CN11/CN12 video input/output for telemetry overlays.
     
   - Seamless connection to external video transmitters.
 
-  Wireless Flexibility:
+  **Wireless Flexibility:**
   
   - Bluetooth (HC-05) enables remote tuning, camera/gimbal control, real-time telemetry, and wireless system configuration.
 
-  Robust Sensor Suite:
+  **Robust Sensor Suite:**
   
   - MPU6050 IMU for accurate flight stabilization.
     
@@ -40,17 +40,17 @@ Key Features & Benefits:
     
   - Sonar port enabling collision avoidance, terrain-following, and safe landings.
 
-  Smart Power Management:
+  **Smart Power Management:**
   
   - Efficient onboard buck converters and MOSFET power switching ensure battery efficiency and prolonged flight times.
     
   - USB power and integrated ST-Link debugger simplify development and testing.
     
-  Expandable & Versatile:
+  **Expandable & Versatile:**
   
   - Plenty of GPIO, SPI, UART, and I2C breakout headers for custom sensors, additional modules, and peripheral devices.
 
-  Technical Specifications:
+  **Technical Specifications:**
   
   - MCU: STM32H743 (ARM Cortex®-M7 at 400 MHz)
     
@@ -66,7 +66,7 @@ Key Features & Benefits:
     
   - Power Supply: Integrated DC-DC converters (3.3V, 5V), USB power option, MOSFET-controlled power rails
 
-  Ideal Applications:
+  **Ideal Applications:**
   
   - FPV Drone Racing & Cinematic Aerial Videography
     
