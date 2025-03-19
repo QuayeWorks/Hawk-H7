@@ -8,7 +8,7 @@ Key Features & Benefits:
 
   Advanced Flight Control:
   
-    ARM Cortex®-M7 STM32H743 MCU (400 MHz) for unmatched real-time performance.
+  - ARM Cortex®-M7 STM32H743 MCU (400 MHz) for unmatched real-time performance.
     
     Supports precise stabilization and autonomous flight functions.
 
