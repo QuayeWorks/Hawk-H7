@@ -2,7 +2,7 @@ QuayeWorks Hawk-H7 Multicopter Flight Controller & AI Vision Board
 
 ![image](https://github.com/user-attachments/assets/4ce48747-8ada-4eb6-930e-fb27f005508e)
 ![image](https://github.com/user-attachments/assets/e76cfe3a-583a-495e-aa54-c03995705b6b)
-![Uploading image.png…]()
+![image](https://github.com/user-attachments/assets/37a7f0a2-3996-4085-a9fd-f79346cb6480)
 
 **Unlock Next-Level Drone Performance**
 
