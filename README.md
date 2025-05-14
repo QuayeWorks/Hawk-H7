@@ -1,4 +1,4 @@
-QuayeWorks Hawk-H7 Multicopter Flight Controller & AI Vision Board
+QuayeWorks Hawk-H7 Multicopter Flight Controller & AI Vision Board (Full Release 6-30-25)
 
 ![image](https://github.com/user-attachments/assets/4ce48747-8ada-4eb6-930e-fb27f005508e)
 ![image](https://github.com/user-attachments/assets/e76cfe3a-583a-495e-aa54-c03995705b6b)
