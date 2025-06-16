@@ -18,6 +18,7 @@
 static UART_HandleTypeDef *dbgUart;
 static char cmdBuf[32];
 static uint8_t cmdIdx;
+static uint32_t lastBeat;
 
 static void send(const char *s)
 {
@@ -97,6 +98,13 @@ static void handle_cmd(void)
 
 void DebugMenu_Task(void)
 {
+    uint32_t now = HAL_GetTick();
+    if (now - lastBeat >= 1000) {
+        char buf[32];
+        int len = snprintf(buf, sizeof(buf), "[%lu ms]\r\n> ", (unsigned long)now);
+        HAL_UART_Transmit(dbgUart, (uint8_t*)buf, len, HAL_MAX_DELAY);
+        lastBeat = now;
+    }
     uint8_t ch;
     while(HAL_UART_Receive(dbgUart,&ch,1,0) == HAL_OK) {
         if(ch=='\r' || ch=='\n') {
