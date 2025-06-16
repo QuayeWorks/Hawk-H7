@@ -41,6 +41,7 @@
 #include "ekf.h"
 #include "sonar.h"
 #include "battery.h"
+#include "debug_menu.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -199,6 +200,8 @@ int main(void)
   Battery_Init(&hi2c1, Settings_GetINA219ShuntOhm());    // INA219 via I2C1, for measured load voltage/current
 
   EKF_Init();              // your EKF/UKF library initialization
+
+  DebugMenu_Init(&huart1);
 
 
 
@@ -517,7 +520,9 @@ int main(void)
   while (1)
   {
 
-	uint32_t now = HAL_GetTick();
+        DebugMenu_Task();
+
+        uint32_t now = HAL_GetTick();
 
 	// ─── 1) Periodic Sonar Trigger (every 50 ms) ───
     static uint32_t lastTrig = 0;
