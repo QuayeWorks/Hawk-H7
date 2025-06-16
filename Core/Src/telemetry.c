@@ -7,6 +7,7 @@
 
 
 #include "telemetry.h"
+#include "stm32h7xx_hal.h"
 // UART handle for telemetry output (defined in main.c or elsewhere)
 extern UART_HandleTypeDef huart3;
 
