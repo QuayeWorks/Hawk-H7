@@ -11,7 +11,6 @@
 #include "rc_input.h"
 #include "stm32h7xx_hal.h"
 #include <string.h>    // for memset
-#include <string.h>    // for memset
 #include <stdlib.h>    // for abs()
 
 static uint32_t lastSYNC;
