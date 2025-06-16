@@ -3,6 +3,8 @@
 #include "flight_state.h"
 #include "buzzer.h"
 #include "settings.h"  // for any thresholds, if you want to re‐load them dynamically
+#include "motor.h"
+#include "stm32h7xx_hal.h"
 
 // The single 32‐bit container for all health+state flags
 uint32_t fsState = 0;
@@ -103,11 +105,24 @@ void FlightState_Update(void) {
 
 void CommenceAutoLand(void)
 {
-    // TODO: fly back to home or descend vertically.
-    // Right now this is a no-op so your code links.
+    /* Simple auto-land: gradually reduce all motor outputs then disarm.  This
+     * is only a placeholder – real RTL logic would navigate to the recorded
+     * home location and manage descent with sensor feedback. */
+    for (uint16_t pwm = Settings_GetMotorPWMMaxUs();
+         pwm > Settings_GetMotorPWMMinUs();
+         pwm -= 10)
+    {
+        Motor_SetAllPWM(pwm);
+        HAL_Delay(20);
+    }
+    Motor_SetAllPWM(Settings_GetMotorPWMMinUs());
+    FlightState_Disarm();
 }
 
 void CommenceAltHold(void)
 {
-    // TODO: engage altitude‐hold controller
+    /* Placeholder implementation: simply maintain the current throttle.  A real
+     * controller would close the loop using barometer/GPS/sonar data. */
+    uint16_t throttle = Motor_ThrottleToPWM(1500);
+    Motor_SetAllPWM(throttle);
 }

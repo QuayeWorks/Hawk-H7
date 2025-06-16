@@ -9,6 +9,7 @@
 #include "motor.h"
 #include "settings.h"
 #include "stm32h7xx_hal.h"
+#include "battery.h"
 
 // Structure to hold timer handle + channel
 typedef struct {
@@ -78,14 +79,26 @@ uint16_t Motor_ThrottleToPWM(uint16_t throttle_ppm) {
 
 bool Motor_EscResponds(uint8_t index)
 {
-    // TODO: real check goes here
-    (void)index;
-    return true;
+    /* Send a short spin-up pulse and check the resulting current draw.  If the
+     * current increases slightly we assume the ESC responded.  This is a very
+     * rough heuristic but provides a useful placeholder until a real RPM
+     * sensor or telemetry feedback is implemented. */
+
+    uint16_t test = Settings_GetMotorPWMMinUs() + 100;
+    Motor_SetPWM(index, test);
+    HAL_Delay(5);
+    float current = Battery_ReadCurrent();
+    Motor_SetPWM(index, Settings_GetMotorPWMMinUs());
+    return current > 0.1f; // 100 mA threshold
 }
 
 
 void Motor_AutoDetectOrientation(void)
 {
-    // TODO: implement real orientation detection.
-    // For now, just a no-op so the call in main() compiles.
+    /* Without sensor feedback we default all motors to normal orientation.  The
+     * settings system allows saving this so that users can override it later. */
+    uint8_t count = Settings_GetMotorCount();
+    for (uint8_t i = 0; i < count; i++) {
+        Settings_SetMotorDir(i, 0);  // 0 = normal rotation
+    }
 }

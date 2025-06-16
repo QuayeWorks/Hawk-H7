@@ -103,7 +103,12 @@ bool RC_AllChannelsStable(void) {
 
 bool RC_LinkLostForSeconds(uint16_t seconds)
 {
-    // TODO: implement real link‐loss detection (e.g. HAL_GetTick() - lastChannelTimestamp)
-    (void)seconds;
-    return false;
+    uint32_t now = HAL_GetTick();
+    uint32_t threshold = (uint32_t)seconds * 1000u;
+    for (uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
+        if ((now - channelTimestamps[i]) < threshold) {
+            return false;
+        }
+    }
+    return true;
 }

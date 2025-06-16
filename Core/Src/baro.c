@@ -37,10 +37,13 @@ bool Baro_Gps_Sonar_AltitudeAgreement(float baroAlt,
                                       float gpsAlt,
                                       float sonarAlt)
 {
-    // TODO: pull thresholds from Settings (e.g. Settings_GetBaroAgreementThreshold())
-    // and compare fabs(baroAlt - gpsAlt) and fabs(baroAlt - sonarAlt)
-    (void)baroAlt;   // silence unused‐param warnings
-    (void)gpsAlt;
-    (void)sonarAlt;
+    /* Simple sanity check comparing the barometric altitude with GPS and sonar
+     * estimates.  A more sophisticated implementation could make the
+     * thresholds configurable via the settings system.  For now we accept up to
+     * five metres of disagreement between any pair of sensors. */
+
+    const float maxDiff = 5.0f; // metres
+    if (fabsf(baroAlt - gpsAlt)   > maxDiff) return false;
+    if (fabsf(baroAlt - sonarAlt) > maxDiff) return false;
     return true;
 }

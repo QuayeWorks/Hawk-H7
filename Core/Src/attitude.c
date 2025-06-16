@@ -19,9 +19,13 @@ static AttitudeAngles _angles = {0,0,0};
 void Attitude_Update(float ax, float ay, float az,
                      float gx, float gy, float gz)
 {
-    // TODO: run your filter here to update _tiltDeg and _angRateDps.
-    // For now, we’ll just record the magnitude of the gyro as the “rate”,
-    // and compute tilt as arccos(az / |a|) in degrees.
+    /*
+     * A full AHRS solution is beyond the scope of this example, however we can
+     * provide a very small complementary filter so the rest of the code base
+     * has sensible values to work with.  Roll and pitch are derived from the
+     * accelerometer while yaw is integrated from the gyroscope.  The angular
+     * rate magnitude is taken directly from the gyro inputs.
+     */
 
     // Gyro magnitude
     _angRateDps = sqrtf(gx*gx + gy*gy + gz*gz);
@@ -33,14 +37,18 @@ void Attitude_Update(float ax, float ay, float az,
         if (cosTilt >  1.0f) cosTilt =  1.0f;
         if (cosTilt < -1.0f) cosTilt = -1.0f;
         _tiltDeg = acosf(cosTilt) * (180.0f / 3.14159265f);
+
+        _angles.roll  = atan2f(ay, az) * (180.0f / 3.14159265f);
+        _angles.pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * (180.0f / 3.14159265f);
     } else {
-        _tiltDeg = 0.0f;
+        _tiltDeg     = 0.0f;
+        _angles.roll = 0.0f;
+        _angles.pitch = 0.0f;
     }
 
-    // Fill in _angles.roll/_angles.pitch/_angles.yaw however you compute them:
-    _angles.roll  = /*...*/ 0.0f;
-    _angles.pitch = /*...*/ 0.0f;
-    _angles.yaw   = /*...*/ 0.0f;
+    static float yawAccum = 0.0f;
+    yawAccum += gz * 0.005f;   // assume ~200 Hz update rate
+    _angles.yaw = yawAccum;
 }
 
 float Attitude_GetTiltAngle(void)

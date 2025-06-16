@@ -17,17 +17,31 @@ extern I2C_HandleTypeDef hi2c1;
 // Read the calibration registers into cdata
 bool BMP388_ReadCalibData(BMP388_CalibData *cdata)
 {
-    // TODO: replace these stub addresses with the actual register blocks
-    // The real BMP388 calibration sequence is about 21 bytes at 0x31…
-    uint8_t buf[21] = {0};
+    /* Calibration registers occupy 21 bytes starting at 0x31.  The layout is
+     * documented in the BMP388 datasheet. */
+
+    uint8_t buf[21];
     if (HAL_I2C_Mem_Read(&hi2c1, BMP388_I2C_ADDR,
                          0x31, 1, buf, sizeof(buf), HAL_MAX_DELAY) != HAL_OK)
     {
         return false;
     }
-    // Unpack buf into cdata->par_t1 … par_p11 here per datasheet
-    // For now, zero them:
-    memset(cdata, 0, sizeof(*cdata));
+
+    cdata->par_t1  = (uint16_t)((buf[1]  << 8) | buf[0]);
+    cdata->par_t2  = (int16_t) ((buf[3]  << 8) | buf[2]);
+    cdata->par_t3  = (int8_t)  buf[4];
+    cdata->par_p1  = (uint16_t)((buf[6]  << 8) | buf[5]);
+    cdata->par_p2  = (int16_t) ((buf[8]  << 8) | buf[7]);
+    cdata->par_p3  = (int8_t)  buf[9];
+    cdata->par_p4  = (int8_t)  buf[10];
+    cdata->par_p5  = (uint16_t)((buf[12] << 8) | buf[11]);
+    cdata->par_p6  = (int16_t) ((buf[14] << 8) | buf[13]);
+    cdata->par_p7  = (int8_t)  buf[15];
+    cdata->par_p8  = (int8_t)  buf[16];
+    cdata->par_p9  = (int16_t) ((buf[18] << 8) | buf[17]);
+    cdata->par_p10 = buf[19];
+    cdata->par_p11 = buf[20];
+
     return true;
 }
 
