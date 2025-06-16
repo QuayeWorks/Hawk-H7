@@ -7,10 +7,19 @@
 
 
 #include <cpu.h>
+#include "stm32h7xx_hal.h"
 
 bool CPU_CheckTimingConstraints(void)
 {
-    // TODO: measure loop intervals / counters and verify
-    // For now, always report “OK.”
-    return true;
+    static uint32_t lastCall = 0;
+    uint32_t now = HAL_GetTick();
+    uint32_t dt  = now - lastCall;
+    lastCall = now;
+
+    /*
+     * Expect this function to be called at least every 5 ms by the main loop.
+     * If the time delta grows beyond that we report a failure which can be used
+     * by the caller as a CPU load indicator.
+     */
+    return dt <= 5;
 }
