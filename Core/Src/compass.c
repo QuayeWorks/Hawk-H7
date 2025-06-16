@@ -54,9 +54,9 @@ float Compass_ComputeHeading(int16_t mx, int16_t my, int16_t mz) {
 
 bool Compass_CheckMahalanobis(int16_t mx, int16_t my, int16_t mz, float threshold) {
     // Simple Euclidean distance in XYZ as a proxy for Mahalanobis
-    float dx = ((float)mx) - ((float)mx);
-    float dy = ((float)my) - ((float)my);
-    float dz = ((float)mz) - ((float)mz);
-    float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+    float fx = (float)mx;
+    float fy = (float)my;
+    float fz = (float)mz;
+    float dist = sqrtf(fx*fx + fy*fy + fz*fz);
     return (dist <= threshold);
 }

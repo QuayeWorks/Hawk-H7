@@ -78,10 +78,10 @@ bool RC_ChannelsAreStale(uint32_t stale_time_ms) {
     uint32_t now = HAL_GetTick();
     for (uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
         if ((now - channelTimestamps[i]) > stale_time_ms) {
-            return false;
+            return true;
         }
     }
-    return true;
+    return false;
 }
 
 uint16_t RC_GetRSSI(void) {

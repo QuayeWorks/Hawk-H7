@@ -11,7 +11,7 @@
  * - To configure offsets, call Compass_LoadCalibration(x,y,z soft, x,y,z hard).
  * - Call Compass_ReadRaw(&mx,&my,&mz) to fetch int16 raw counts.
  * - Compute heading with Compass_ComputeHeading(mx,my,mz).
- * - Validate with Compass_CheckMahalanobis(mx,my,mz,heading,threshold).
+ * - Validate with Compass_CheckMahalanobis(mx,my,mz,threshold).
  */
 
 void  Compass_Init(I2C_HandleTypeDef *i2c_handle);
