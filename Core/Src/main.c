@@ -119,6 +119,12 @@ static void MX_TIM12_Init(void);
 /** UART receive complete callback inserted in user callbacks **/
 
 
+static void DebugMsg(const char *msg)
+{
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -156,22 +162,38 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  DebugMsg("GPIO init done\r\n");
   MX_DMA_Init();
+  DebugMsg("DMA init done\r\n");
   MX_I2C1_Init();
+  DebugMsg("I2C1 init done\r\n");
   MX_SDMMC1_SD_Init();
+  DebugMsg("SDMMC1 init done\r\n");
   MX_SPI4_Init();
+  DebugMsg("SPI4 init done\r\n");
   MX_TIM1_Init();
+  DebugMsg("TIM1 init done\r\n");
   MX_TIM2_Init();
+  DebugMsg("TIM2 init done\r\n");
   MX_TIM3_Init();
+  DebugMsg("TIM3 init done\r\n");
   MX_TIM5_Init();
+  DebugMsg("TIM5 init done\r\n");
   MX_USART1_UART_Init();
+  DebugMsg("USART1 init done\r\n");
   MX_USART3_UART_Init();
+  DebugMsg("USART3 init done\r\n");
   MX_USART6_UART_Init();
+  DebugMsg("USART6 init done\r\n");
   MX_FATFS_Init();
+  DebugMsg("FATFS init done\r\n");
   MX_ADC3_Init();
+  DebugMsg("ADC3 init done\r\n");
   MX_TIM12_Init();
+  DebugMsg("TIM12 init done\r\n");
   /* USER CODE BEGIN 2 */
   Power_Init();
+  DebugMsg("Power init done\r\n");
   // Link SD driver so that “0:” means the SD card
   FATFS_LinkDriver(&SD_Driver, SDPath);
 
@@ -192,16 +214,25 @@ int main(void)
 
   // 3) Initialize all sensor buses & devices
   IMU_Init(&hi2c1);        // begin MPU6050 DMP or raw‐data streaming
+  DebugMsg("IMU init done\r\n");
   Compass_Init(&hi2c1);    // begin QMC5883/MC5883
+  DebugMsg("Compass init done\r\n");
   Baro_Init(&hi2c1);       // begin BMP388
+  DebugMsg("Baro init done\r\n");
   GPS_Init(&huart6);      // USART6
+  DebugMsg("GPS init done\r\n");
   RC_Input_Init();   // PPM input via TIM2 interrupts
+  DebugMsg("RC input init done\r\n");
   Sonar_Init();      // e.g. HC‐SR04 trigger/echo with TIM3
+  DebugMsg("Sonar init done\r\n");
   Battery_Init(&hi2c1, Settings_GetINA219ShuntOhm());    // INA219 via I2C1, for measured load voltage/current
+  DebugMsg("Battery init done\r\n");
 
   EKF_Init();              // your EKF/UKF library initialization
+  DebugMsg("EKF init done\r\n");
 
   DebugMenu_Init(&huart1);
+  DebugMsg("Initialization complete\r\n");
 
 
 
