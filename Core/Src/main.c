@@ -205,6 +205,7 @@ int main(void)
 
 
 
+#ifndef DEBUG_BYPASS_HEALTH
   // 4) Pre‐arm Calibration (Power ON → IMU level & bias)
 
   // In pre‐arm calibrations:
@@ -507,11 +508,13 @@ int main(void)
           }
       }
 
-      if (prearmOK) {
-          FlightState_Arm();
-          HAL_UART_Transmit(&huart1, (uint8_t*)"OK: Armed!\r\n", 12, HAL_MAX_DELAY);
-      }
+  if (prearmOK) {
+      FlightState_Arm();
+      HAL_UART_Transmit(&huart1, (uint8_t*)"OK: Armed!\r\n", 12, HAL_MAX_DELAY);
   }
+}
+
+#endif // DEBUG_BYPASS_HEALTH
 
   /* USER CODE END 2 */
 

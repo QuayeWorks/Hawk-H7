@@ -152,6 +152,10 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+/* Define DEBUG_BYPASS_HEALTH to skip pre-arm health checks and run the
+ * debug menu immediately. Enable via compiler flag or uncomment below. */
+/* #define DEBUG_BYPASS_HEALTH */
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
