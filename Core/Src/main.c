@@ -568,8 +568,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-        DebugMenu_Task();
+        DebugMsg("loop start\r\n");
 
         uint32_t now = HAL_GetTick();
 
@@ -747,6 +746,8 @@ int main(void)
     }
 
     // Sleep until next loop iteration (run at ~200 Hz for attitude, ~1 kHz for IMU)
+    DebugMenu_Task();
+    DebugMsg("loop end\r\n");
     HAL_Delay(1);  // crude ~200 Hz loop.  (Better: use a TIM interrupt at 200 Hz.)
 
     /* USER CODE END WHILE */
