@@ -90,22 +90,28 @@ static const char *ppm_ch_names[RC_MAX_CHANNELS] = {
 
 static void show_ppm(void)
 {
-    char buf[128];
-    int len = snprintf(buf, sizeof(buf), "PPM:\r\n");
+    char buf[16];
 
-    // Print channel names
+    // Header
+    send("PPM:\r\n");
+
+    // Channel names
     for(uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
-        len += snprintf(&buf[len], sizeof(buf)-len, "%6s", ppm_ch_names[i]);
+        int n = snprintf(buf, sizeof(buf), "%6s", ppm_ch_names[i]);
+        if (n > 0) {
+            HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+        }
     }
-    len += snprintf(&buf[len], sizeof(buf)-len, "\r\n");
+    send("\r\n");
 
-    // Print channel values
+    // Channel values
     for(uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
-        len += snprintf(&buf[len], sizeof(buf)-len, "%6u", RC_GetChannel(i));
+        int n = snprintf(buf, sizeof(buf), "%6u", RC_GetChannel(i));
+        if (n > 0) {
+            HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+        }
     }
-    len += snprintf(&buf[len], sizeof(buf)-len, "\r\n");
-
-    HAL_UART_Transmit(dbgUart,(uint8_t*)buf,len,HAL_MAX_DELAY);
+    send("\r\n");
 }
 
 static void test_buzzer(void)
