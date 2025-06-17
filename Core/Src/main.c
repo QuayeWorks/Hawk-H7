@@ -266,10 +266,10 @@ int main(void)
   float imu_bx, imu_by, imu_bz;
 
   if (Settings_GetCalibrateOnBoot()) {
-	  bool imu_ok = IMU_CalibrateOnBoot(
-	                  Settings_GetCalibSamples(),
-	                  Settings_GetAccelTolG(),
-	                  &imu_bx, &imu_by, &imu_bz);
+          bool imu_ok = IMU_CalibrateOnBoot(
+                          Settings_GetCalibSamples(),
+                          Settings_GetAccelTolG(),
+                          &imu_bx, &imu_by, &imu_bz);
 
       if (imu_ok) {
     	  // save them back into settings (and IMU’s internal bias storage):
@@ -284,6 +284,7 @@ int main(void)
       // Skip calibration on boot; assume old biases from Settings are already correct
       FlightState_SetHealth(FS_HEALTH_IMU_OK_BIT);
   }
+  DebugMsg("IMU calibration done\r\n");
 
   // 5) Load any compass offsets from settings
   if (Settings_GetCompassEnabled()) {
@@ -318,6 +319,7 @@ int main(void)
       // If the user disabled compass in settings, consider it “OK” by default
       FlightState_SetHealth(FS_HEALTH_COMPASS_OK_BIT);
   }
+  DebugMsg("Compass check done\r\n");
 
   // 6) Barometer pre‐check
   if (Settings_GetBaroEnabled()) {
@@ -339,6 +341,7 @@ int main(void)
   } else {
       FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
   }
+  DebugMsg("Barometer pre-check done\r\n");
 
   // 7) Sonar pre‐check (if used)
   if (Settings_GetSonarEnabled()) {
@@ -361,6 +364,7 @@ int main(void)
   } else {
       FlightState_SetHealth(FS_HEALTH_SONAR_OK_BIT);
   }
+  DebugMsg("Sonar pre-check done\r\n");
 
   // 8) GPS pre‐check
   if (Settings_GetGPSEnabled()) {
@@ -389,6 +393,7 @@ int main(void)
   } else {
       FlightState_SetHealth(FS_HEALTH_GPS_OK_BIT);
   }
+  DebugMsg("GPS pre-check done\r\n");
 
   // 9) RC link pre‐check
   {
@@ -406,9 +411,10 @@ int main(void)
           FlightState_ClearHealth(FS_HEALTH_RC_OK_BIT);
           Buzzer_PlayTone(TONE_ERROR_RC);
       }
-  }
+    }
+    DebugMsg("RC link pre-check done\r\n");
 
-  // 10) Battery pre‐check under no load (just check voltage per cell)
+    // 10) Battery pre‐check under no load (just check voltage per cell)
   {
       float packVolts = Battery_ReadPackVoltage();
       float perCell = Battery_ReadPerCellVoltage();
@@ -428,6 +434,8 @@ int main(void)
       }
 
   }
+
+  DebugMsg("Battery pre-check done\r\n");
 
   // —— Pre‐arm Calibration & Health Checks ——
   // (IMU level/bias, compass Mahalanobis, baro, sonar, GPS, RC, battery)
@@ -470,6 +478,7 @@ int main(void)
           Buzzer_PlayTone(TONE_ERROR_EKF);
       }
   }
+  DebugMsg("EKF sensor publish done\r\n");
   // —————————————————————————————————————————
   Motor_Init();      // ESC PWM outputs
 
@@ -483,6 +492,7 @@ int main(void)
           Buzzer_PlayTone(TONE_ERROR_EKF);
       }
   }
+  DebugMsg("EKF health pre-check done\r\n");
 
   // At this point, FlightState_Update() has already been called by every SetHealth()/ClearHealth().
   // If all health bits are set, FS_READY_BIT will be set.  Otherwise, you are stuck “un‐ready.”
@@ -509,6 +519,7 @@ int main(void)
       // into settings.ini (if dynamic) via Settings_SetMotorPWMMinUs() etc.
       Buzzer_PlayTone(TONE_READY);
   }
+  DebugMsg("Motor spin-up calibration done\r\n");
 
   // 13) Motor orientation auto‐config (even‐count props only)
   if (Settings_GetMotorAutoDetect()) {
@@ -518,6 +529,7 @@ int main(void)
       // Settings_SetMotorDir(i, newDir).
       Motor_AutoDetectOrientation();
   }
+  DebugMsg("Motor orientation auto-config done\r\n");
 
   // 14) Now we wait for the actual “arming command” from the pilot →
   //     (stick positions or a dedicated switch) → but only if Ready==true
@@ -546,6 +558,7 @@ int main(void)
       HAL_UART_Transmit(&huart1, (uint8_t*)"OK: Armed!\r\n", 12, HAL_MAX_DELAY);
   }
 }
+  DebugMsg("Pre-arm sequence complete\r\n");
 
 #endif // DEBUG_BYPASS_HEALTH
 
