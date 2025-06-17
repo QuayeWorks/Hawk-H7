@@ -19,18 +19,28 @@ static UART_HandleTypeDef *dbgUart;
 static char cmdBuf[32];
 static uint8_t cmdIdx;
 static uint32_t lastBeat;
+static uint8_t rxByte;
+
+// Forward GPS byte handler so we can chain callbacks
+void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 
 static void send(const char *s)
 {
     HAL_UART_Transmit(dbgUart, (uint8_t*)s, strlen(s), HAL_MAX_DELAY);
 }
 
+static void show_menu(void)
+{
+    send("\r\n--- Debug Menu ---\r\n");
+    send("h: help\r\ns: sensors\r\np: ppm\r\nb: buzzer test\r\n> ");
+}
+
 void DebugMenu_Init(UART_HandleTypeDef *huart)
 {
     dbgUart = huart;
     cmdIdx = 0;
-    send("\r\n--- Debug Menu ---\r\n");
-    send("h: help\r\ns: sensors\r\np: ppm\r\nb: buzzer test\r\n> ");
+    show_menu();
+    HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
 }
 
 static void show_help(void)
@@ -101,22 +111,31 @@ void DebugMenu_Task(void)
     uint32_t now = HAL_GetTick();
     if (now - lastBeat >= 1000) {
         char buf[32];
-        int len = snprintf(buf, sizeof(buf), "[%lu ms]\r\n> ", (unsigned long)now);
+        int len = snprintf(buf, sizeof(buf), "[%lu ms]\r\n", (unsigned long)now);
         HAL_UART_Transmit(dbgUart, (uint8_t*)buf, len, HAL_MAX_DELAY);
+        show_menu();
         lastBeat = now;
     }
-    uint8_t ch;
-    while(HAL_UART_Receive(dbgUart,&ch,1,0) == HAL_OK) {
-        if(ch=='\r' || ch=='\n') {
-            if(cmdIdx>0) {
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == dbgUart) {
+        uint8_t ch = rxByte;
+        if (ch == '\r' || ch == '\n') {
+            if (cmdIdx > 0) {
                 handle_cmd();
-                cmdIdx=0;
+                cmdIdx = 0;
             } else {
                 send("> ");
             }
-        } else if(cmdIdx < sizeof(cmdBuf)-1) {
+        } else if (cmdIdx < sizeof(cmdBuf) - 1) {
             cmdBuf[cmdIdx++] = (char)ch;
         }
+        HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
     }
+
+    // Chain other modules that use UART receive interrupts
+    GPS_UART_RxCpltCallback(huart);
 }
 
