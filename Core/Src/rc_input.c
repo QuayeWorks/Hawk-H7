@@ -13,24 +13,23 @@
 #include <string.h>    // for memset
 #include <stdlib.h>    // for abs()
 
-static uint32_t lastSYNC;
 static uint8_t  ppmChannel;
-static uint32_t riseTime;            // timestamp of last rising edge (µs)
+static uint32_t riseTime;            // timestamp of last processed rising edge (µs)
 static uint16_t channelWidths[RC_MAX_CHANNELS];
 static uint32_t channelTimestamps[RC_MAX_CHANNELS]; // in ms for stale check
 static uint16_t rssiValue;
 
 // Helper to get microseconds since boot (uses DWT cycle counter)
 static inline uint32_t micros(void) {
-    // Ensure DWT is enabled elsewhere; here we assume DWT->CYCCNT increments
-    return DWT->CYCCNT / (HAL_RCC_GetHCLKFreq() / 1000000U);
+    // DWT->CYCCNT increments at the core clock frequency. Using SystemCoreClock
+    // avoids errors if HCLK differs from the CPU speed.
+    return DWT->CYCCNT / (SystemCoreClock / 1000000U);
 }
 
 void RC_Input_Init(void) {
     memset(channelWidths, 0, sizeof(channelWidths));
     memset(channelTimestamps, 0, sizeof(channelTimestamps));
     ppmChannel  = 0;
-    lastSYNC    = 0;
     riseTime    = 0;
     rssiValue   = 0;
     // If your receiver has RSSI on an ADC channel, start ADC here
@@ -42,20 +41,17 @@ void RC_Input_EXTI_Callback(void) {
     GPIO_PinState state = HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_9); // Adjust port/pin as needed
 
     if (state == GPIO_PIN_SET) {
-        // Rising edge: record time
-        riseTime = now;
-    } else {
-        // Falling edge: compute pulse width
+        // Rising edge: measure time since previous rising edge
         uint32_t width = now - riseTime;
+        riseTime = now;
+
         if (width > RC_SYNC_PULSE_US) {
             // Sync pause → reset channel index
             ppmChannel = 0;
-        } else {
-            if (ppmChannel < RC_MAX_CHANNELS) {
-                channelWidths[ppmChannel]     = (uint16_t)width;
-                channelTimestamps[ppmChannel] = HAL_GetTick();
-                ppmChannel++;
-            }
+        } else if (ppmChannel < RC_MAX_CHANNELS) {
+            channelWidths[ppmChannel]     = (uint16_t)width;
+            channelTimestamps[ppmChannel] = HAL_GetTick();
+            ppmChannel++;
         }
     }
 }
