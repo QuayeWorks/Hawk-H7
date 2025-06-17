@@ -24,7 +24,7 @@
  * - Use RC_GetRSSI() and RC_AllChannelsStable() for link health checks.
  */
 
-#define RC_MAX_CHANNELS    8
+#define RC_MAX_CHANNELS    6
 #define RC_SYNC_PULSE_US  3000   // gap > this indicates frame sync
 
 // Initialize PPM input state. Should be called once after EXTI for PPM pin is enabled.
