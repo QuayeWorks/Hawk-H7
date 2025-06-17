@@ -12,5 +12,6 @@
 
 void DebugMenu_Init(UART_HandleTypeDef *huart);
 void DebugMenu_Task(void);
+void DebugMenu_ForceInput(uint8_t ch);
 
 #endif // DEBUG_MENU_H
