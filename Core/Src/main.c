@@ -236,6 +236,9 @@ int main(void)
   DebugMenu_Init(&huart1);
   DebugMsg("Initialization complete\r\n");
 
+  Motor_Init();      // ESC PWM outputs
+
+
 
 
 #ifndef DEBUG_BYPASS_HEALTH
@@ -480,7 +483,6 @@ int main(void)
   }
   DebugMsg("EKF sensor publish done\r\n");
   // —————————————————————————————————————————
-  Motor_Init();      // ESC PWM outputs
 
   // 11) EKF health pre‐check (if you have a ready‐made EKF routine)
   {
