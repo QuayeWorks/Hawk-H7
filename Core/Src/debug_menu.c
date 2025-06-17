@@ -21,12 +21,14 @@ static uint8_t cmdIdx;
 static uint32_t lastBeat;
 static volatile uint8_t rxByte;
 static volatile uint8_t rxPending;
+static volatile uint8_t actionMask;
 
 // Forward GPS byte handler so we can chain callbacks
 void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 
 static void process_char(uint8_t ch);
 static void handle_cmd(void);
+static void process_actions(void);
 
 static void send(const char *s)
 {
@@ -46,6 +48,7 @@ void DebugMenu_Init(UART_HandleTypeDef *huart)
     show_menu();
     HAL_UART_Receive_IT(dbgUart, (uint8_t *)&rxByte, 1);
     rxPending = 0;
+    actionMask = DEBUG_MENU_NONE;
 }
 
 static void show_help(void)
@@ -96,6 +99,22 @@ static void test_buzzer(void)
     Buzzer_Stop();
 }
 
+static void process_actions(void)
+{
+    if (actionMask & DEBUG_MENU_SENSORS) {
+        show_sensors();
+    }
+    if (actionMask & DEBUG_MENU_PPM) {
+        show_ppm();
+    }
+    if (actionMask & DEBUG_MENU_BUZZER) {
+        test_buzzer();
+    }
+    if (actionMask & DEBUG_MENU_HELP) {
+        show_help();
+    }
+}
+
 static void process_char(uint8_t ch)
 {
     if (ch == '\r' || ch == '\n') {
@@ -130,6 +149,16 @@ void DebugMenu_ForceInput(uint8_t ch)
     process_char(ch);
 }
 
+void DebugMenu_SetActionMask(uint8_t mask)
+{
+    actionMask = mask;
+}
+
+uint8_t DebugMenu_GetActionMask(void)
+{
+    return actionMask;
+}
+
 void DebugMenu_Task(void)
 {
     uint32_t now = HAL_GetTick();
@@ -138,6 +167,7 @@ void DebugMenu_Task(void)
         int len = snprintf(buf, sizeof(buf), "[%lu ms]\r\n", (unsigned long)now);
         HAL_UART_Transmit(dbgUart, (uint8_t*)buf, len, HAL_MAX_DELAY);
         show_menu();
+        process_actions();
         lastBeat = now;
     }
 

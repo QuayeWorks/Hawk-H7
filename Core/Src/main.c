@@ -234,6 +234,7 @@ int main(void)
   DebugMsg("EKF init done\r\n");
 
   DebugMenu_Init(&huart1);
+  DebugMenu_SetActionMask(DEBUG_MENU_HELP);
   DebugMsg("Initialization complete\r\n");
 
   Motor_Init();      // ESC PWM outputs
