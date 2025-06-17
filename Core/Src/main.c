@@ -570,7 +570,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-        DebugMsg("loop start\r\n");
 
         uint32_t now = HAL_GetTick();
 
