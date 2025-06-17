@@ -22,8 +22,9 @@ static uint16_t rssiValue;
 
 // Helper to get microseconds since boot (uses DWT cycle counter)
 static inline uint32_t micros(void) {
-    // Ensure DWT is enabled elsewhere; here we assume DWT->CYCCNT increments
-    return DWT->CYCCNT / (HAL_RCC_GetHCLKFreq() / 1000000U);
+    // DWT->CYCCNT increments at the core clock frequency. Using SystemCoreClock
+    // avoids errors if HCLK differs from the CPU speed.
+    return DWT->CYCCNT / (SystemCoreClock / 1000000U);
 }
 
 void RC_Input_Init(void) {
