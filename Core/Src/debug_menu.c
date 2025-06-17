@@ -62,21 +62,43 @@ static void show_help(void)
 
 static void show_sensors(void)
 {
-    float ax,ay,az,gx,gy,gz;
-    IMU_GetAccelMps2(&ax,&ay,&az);
-    IMU_GetGyroDPS(&gx,&gy,&gz);
-    float pressure=0.0f;
-    Baro_ReadPressure(&pressure);
+    /* Fetch fresh data from each sensor so the output reflects the
+       current state rather than whatever values happened to be read
+       during initialization.  If a read fails we still print the
+       previous values but append an error notice so the user knows
+       that something went wrong. */
+
+    int16_t rawAx, rawAy, rawAz, rawGx, rawGy, rawGz;
+    bool imu_ok = IMU_ReadRaw(&rawAx, &rawAy, &rawAz, &rawGx, &rawGy, &rawGz);
+
+    float ax = 0.0f, ay = 0.0f, az = 0.0f;
+    float gx = 0.0f, gy = 0.0f, gz = 0.0f;
+    IMU_GetAccelMps2(&ax, &ay, &az);
+    IMU_GetGyroDPS(&gx, &gy, &gz);
+
+    float pressure = 0.0f;
+    bool baro_ok = Baro_ReadPressure(&pressure);
     float alt = Baro_ComputeAltitude(pressure);
-    int16_t mx,my,mz;
-    Compass_ReadRaw(&mx,&my,&mz);
+
+    int16_t mx = 0, my = 0, mz = 0;
+    bool mag_ok = Compass_ReadRaw(&mx, &my, &mz);
+
     float v = Battery_ReadPackVoltage();
     float i = Battery_ReadCurrent();
-    char buf[128];
-    int len = snprintf(buf,sizeof(buf),
-                       "ACC:%.2f %.2f %.2f GYR:%.2f %.2f %.2f\r\nMAG:%d %d %d BARO:%.2f hPa %.2f m\r\nBAT:V=%.2f I=%.2f\r\n",
-                       ax,ay,az,gx,gy,gz,mx,my,mz,pressure,alt,v,i);
-    HAL_UART_Transmit(dbgUart,(uint8_t*)buf,len,HAL_MAX_DELAY);
+
+    char buf[160];
+    int len = snprintf(buf, sizeof(buf),
+                       "ACC:%.2f %.2f %.2f GYR:%.2f %.2f %.2f%s\r\n"
+                       "MAG:%d %d %d%s BARO:%.2f hPa %.2f m%s\r\n"
+                       "BAT:V=%.2f I=%.2f\r\n",
+                       ax, ay, az, gx, gy, gz,
+                       imu_ok ? "" : " [ERR]",
+                       mx, my, mz,
+                       mag_ok ? "" : " [ERR]",
+                       pressure, alt,
+                       baro_ok ? "" : " [ERR]",
+                       v, i);
+    HAL_UART_Transmit(dbgUart, (uint8_t *)buf, len, HAL_MAX_DELAY);
 }
 
 static const char *ppm_ch_names[RC_MAX_CHANNELS] = {
