@@ -19,10 +19,13 @@ static UART_HandleTypeDef *dbgUart;
 static char cmdBuf[32];
 static uint8_t cmdIdx;
 static uint32_t lastBeat;
-static uint8_t rxByte;
+static volatile uint8_t rxByte;
+static volatile uint8_t rxPending;
 
 // Forward GPS byte handler so we can chain callbacks
 void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart);
+
+static void process_char(uint8_t ch);
 
 static void send(const char *s)
 {
@@ -41,6 +44,7 @@ void DebugMenu_Init(UART_HandleTypeDef *huart)
     cmdIdx = 0;
     show_menu();
     HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
+    rxPending = 0;
 }
 
 static void show_help(void)
@@ -91,6 +95,20 @@ static void test_buzzer(void)
     Buzzer_Stop();
 }
 
+static void process_char(uint8_t ch)
+{
+    if (ch == '\r' || ch == '\n') {
+        if (cmdIdx > 0) {
+            handle_cmd();
+            cmdIdx = 0;
+        } else {
+            send("> ");
+        }
+    } else if (cmdIdx < sizeof(cmdBuf) - 1) {
+        cmdBuf[cmdIdx++] = (char)ch;
+    }
+}
+
 static void handle_cmd(void)
 {
     cmdBuf[cmdIdx] = '\0';
@@ -106,6 +124,11 @@ static void handle_cmd(void)
     send("> ");
 }
 
+void DebugMenu_ForceInput(uint8_t ch)
+{
+    process_char(ch);
+}
+
 void DebugMenu_Task(void)
 {
     uint32_t now = HAL_GetTick();
@@ -116,22 +139,19 @@ void DebugMenu_Task(void)
         show_menu();
         lastBeat = now;
     }
+
+    if (rxPending || rxByte != 0) {
+        uint8_t ch = rxByte;
+        rxPending = 0;
+        rxByte = 0;
+        process_char(ch);
+    }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart == dbgUart) {
-        uint8_t ch = rxByte;
-        if (ch == '\r' || ch == '\n') {
-            if (cmdIdx > 0) {
-                handle_cmd();
-                cmdIdx = 0;
-            } else {
-                send("> ");
-            }
-        } else if (cmdIdx < sizeof(cmdBuf) - 1) {
-            cmdBuf[cmdIdx++] = (char)ch;
-        }
+        rxPending = 1;
         HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
     }
 
