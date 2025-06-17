@@ -23,3 +23,10 @@ bool CPU_CheckTimingConstraints(void)
      */
     return dt <= 5;
 }
+
+void CPU_EnableCycleCounter(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}

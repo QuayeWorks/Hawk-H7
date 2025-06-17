@@ -17,4 +17,7 @@
  */
 bool CPU_CheckTimingConstraints(void);
 
+/// Enable the CPU cycle counter for precise timing.
+void CPU_EnableCycleCounter(void);
+
 #endif // CPU_H
