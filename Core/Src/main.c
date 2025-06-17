@@ -1541,7 +1541,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PPM_Pin */
   GPIO_InitStruct.Pin = PPM_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  // Capture both rising and falling edges so we can measure pulse widths
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(PPM_GPIO_Port, &GPIO_InitStruct);
 
