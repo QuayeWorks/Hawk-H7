@@ -79,14 +79,32 @@ static void show_sensors(void)
     HAL_UART_Transmit(dbgUart,(uint8_t*)buf,len,HAL_MAX_DELAY);
 }
 
+static const char *ppm_ch_names[RC_MAX_CHANNELS] = {
+    "ROLL",
+    "PITCH",
+    "THROT",
+    "YAW",
+    "VBA",
+    "VBB"
+};
+
 static void show_ppm(void)
 {
     char buf[128];
-    int len = snprintf(buf,sizeof(buf),"PPM:");
-    for(uint8_t i=0;i<RC_MAX_CHANNELS;i++) {
-        len += snprintf(&buf[len], sizeof(buf)-len, " %u", RC_GetChannel(i));
+    int len = snprintf(buf, sizeof(buf), "PPM:\r\n");
+
+    // Print channel names
+    for(uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
+        len += snprintf(&buf[len], sizeof(buf)-len, "%6s", ppm_ch_names[i]);
     }
     len += snprintf(&buf[len], sizeof(buf)-len, "\r\n");
+
+    // Print channel values
+    for(uint8_t i = 0; i < RC_MAX_CHANNELS; i++) {
+        len += snprintf(&buf[len], sizeof(buf)-len, "%6u", RC_GetChannel(i));
+    }
+    len += snprintf(&buf[len], sizeof(buf)-len, "\r\n");
+
     HAL_UART_Transmit(dbgUart,(uint8_t*)buf,len,HAL_MAX_DELAY);
 }
 
