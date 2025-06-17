@@ -577,10 +577,12 @@ int main(void)
     if (now - lastTrig >= 50) {
         lastTrig = now;
         Sonar_TriggerAll();
+        DebugMsg("sonar trigger\r\n");
     }
 
 	// a) Always run FlightState_Update() if any health bit might have changed:
     FlightState_Update();
+    DebugMsg("flightstate updated\r\n");
 
     // b) If armed, start sending throttle to motors. Otherwise keep motors at idle:
     if (FlightState_IsArmed()) {
@@ -594,6 +596,7 @@ int main(void)
             Motor_SetPWM(i, Settings_GetMotorPWMMinUs());
         }
     }
+    DebugMsg("throttle update done\r\n");
 
     // c) Continually re‐check all health bits in flight:
     //    (i) IMU plausibility—no clipping/stuck values
@@ -687,6 +690,7 @@ int main(void)
         FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
         Buzzer_PlayTone(TONE_ERROR_CPU);
     }
+    DebugMsg("health checks done\r\n");
 
     // 16) Failsafe checks (only run if armed)
     if (FlightState_IsArmed()) {
@@ -735,6 +739,7 @@ int main(void)
             CommenceAltHold();
         }
     }
+    DebugMsg("failsafe checks done\r\n");
 
     // 17) Telemetry & LED updates
     if (Settings_GetTelemetryEnabled()) {
@@ -744,6 +749,7 @@ int main(void)
     if (Settings_GetLEDEnabled()) {
         LED_UpdateStatus(FlightState_GetStateMask());
     }
+    DebugMsg("telemetry/LED done\r\n");
 
     // Sleep until next loop iteration (run at ~200 Hz for attitude, ~1 kHz for IMU)
     DebugMenu_Task();
