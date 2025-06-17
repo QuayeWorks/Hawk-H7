@@ -26,6 +26,7 @@ static volatile uint8_t rxPending;
 void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 
 static void process_char(uint8_t ch);
+static void handle_cmd(void);
 
 static void send(const char *s)
 {
