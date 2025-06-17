@@ -44,7 +44,7 @@ void DebugMenu_Init(UART_HandleTypeDef *huart)
     dbgUart = huart;
     cmdIdx = 0;
     show_menu();
-    HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
+    HAL_UART_Receive_IT(dbgUart, (uint8_t *)&rxByte, 1);
     rxPending = 0;
 }
 
@@ -153,7 +153,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart == dbgUart) {
         rxPending = 1;
-        HAL_UART_Receive_IT(dbgUart, &rxByte, 1);
+        HAL_UART_Receive_IT(dbgUart, (uint8_t *)&rxByte, 1);
     }
 
     // Chain other modules that use UART receive interrupts
