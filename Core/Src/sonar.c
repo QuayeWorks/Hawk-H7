@@ -1,5 +1,6 @@
 #include "sonar.h"
 #include "stm32h7xx_hal.h"
+#include "main.h"  // for TRIGx pin definitions
 
 #define TRIG_PULSE_US   10   // 10 µs pulse
 #define MAX_DISTANCE_M  6.0f // 6 m max
@@ -10,9 +11,9 @@ static const struct {
     GPIO_TypeDef *port;
     uint16_t      pin;
 } trigPins[SONAR_COUNT] = {
-    { GPIOG, GPIO_PIN_6 }, // SG6
-    { GPIOG, GPIO_PIN_7 }, // SG7
-    { GPIOG, GPIO_PIN_8 }  // SG8
+    { TRIG1_GPIO_Port, TRIG1_Pin }, // PF10
+    { TRIG2_GPIO_Port, TRIG2_Pin }, // PF11
+    { TRIG3_GPIO_Port, TRIG3_Pin }  // PF12
 };
 
 static uint32_t riseTime[SONAR_COUNT];

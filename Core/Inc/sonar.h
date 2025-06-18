@@ -21,6 +21,9 @@
  * - In HAL_GPIO_EXTI_Callback for each echo pin, call Sonar_EchoCallback(index, state).
  * - Call Sonar_TriggerAll() periodically (e.g. every 50ms) to send trigger pulses.
  * - Use Sonar_ReadDistance(index) to get the last measured distance (in meters).
+ *
+ *   Echo pins:   PF6, PF7, PF8
+ *   Trigger pins: PF10, PF11, PF12
  */
 
 #define SONAR_COUNT 3
