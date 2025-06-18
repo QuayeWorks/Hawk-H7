@@ -227,7 +227,7 @@ int main(void)
   DebugMsg("RC input init done\r\n");
   Sonar_Init();      // e.g. HC‐SR04 trigger/echo with TIM3
   DebugMsg("Sonar init done\r\n");
-  Battery_Init(&hi2c1, Settings_GetINA219ShuntOhm());    // INA219 via I2C1, for measured load voltage/current
+  Battery_Init(&hi2c1, &hadc3, Settings_GetINA219ShuntOhm());    // INA219 via I2C1 and ADC3 on PH2
   DebugMsg("Battery init done\r\n");
 
   EKF_Init();              // your EKF/UKF library initialization
