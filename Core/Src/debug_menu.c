@@ -12,6 +12,7 @@
 #include "battery.h"
 #include "gps.h"
 #include "sonar.h"
+#include "settings.h"
 #include "rc_input.h"
 #include "buzzer.h"
 #include <string.h>
@@ -143,12 +144,26 @@ static void show_ppm(void)
 static void show_sonar(void)
 {
     char buf[32];
+
+    if (!Settings_GetSonarEnabled()) {
+        send("SONAR: disabled\r\n");
+        return;
+    }
+
     send("SONAR:");
+    float maxDist = Settings_GetSonarMaxDistance();
     for(uint8_t i = 0; i < SONAR_COUNT; i++) {
         float d = Sonar_ReadDistance(i);
-        int n = snprintf(buf, sizeof(buf), " %.2f", d);
-        if (n > 0) {
-            HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+        if (d >= maxDist) {
+            int n = snprintf(buf, sizeof(buf), " --");
+            if (n > 0) {
+                HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+            }
+        } else {
+            int n = snprintf(buf, sizeof(buf), " %.2f", d);
+            if (n > 0) {
+                HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+            }
         }
     }
     send(" m\r\n");
