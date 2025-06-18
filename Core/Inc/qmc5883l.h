@@ -31,6 +31,8 @@
 
 // Set/Reset period register
 #define QMC5883L_REG_SET_RESET_PERIOD 0x0B
+// Device ID register
+#define QMC5883L_REG_CHIP_ID          0x0D
 
 // Bit masks for STATUS register
 #define QMC5883L_STATUS_DRDY_MASK     0x01  // Data Ready
