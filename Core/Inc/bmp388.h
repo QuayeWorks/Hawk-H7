@@ -64,6 +64,9 @@ typedef struct {
  */
 bool BMP388_ReadCalibData(BMP388_CalibData *cdata);
 
+// Last detected I2C address (8-bit) used for communication
+extern uint8_t bmp388_i2c_addr;
+
 /** Initialize the sensor: detect address, reset, load calibration and configure. */
 bool BMP388_Init(void);
 

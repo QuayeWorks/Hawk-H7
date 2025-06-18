@@ -5,11 +5,14 @@
 #include "bmp388.h"
 #include "stm32h7xx_hal.h"
 #include <string.h>
+#include <stdio.h>
 
-// I2C handle provided by application
+// I2C and UART handles provided by the application
 extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart1;
 
 static uint8_t        bmp_addr = BMP388_I2C_ADDR1;
+uint8_t bmp388_i2c_addr = BMP388_I2C_ADDR1;
 static BMP388_CalibData calib;
 
 // Low-level helpers --------------------------------------------------------
@@ -26,6 +29,21 @@ static bool bmp388_write_reg(uint8_t reg, uint8_t val)
 {
     uint8_t b[2] = { reg, val };
     return HAL_I2C_Master_Transmit(&hi2c1, bmp_addr, b, 2, HAL_MAX_DELAY) == HAL_OK;
+}
+
+// Simple I2C bus scan utility for debugging
+static void bus_scan(void)
+{
+    const char intro[] = "\r\nI2C Scan:\r\n";
+    HAL_UART_Transmit(&huart1, (uint8_t *)intro, sizeof(intro) - 1, HAL_MAX_DELAY);
+    for (uint16_t addr = 1; addr < 128; addr++) {
+        if (HAL_I2C_IsDeviceReady(&hi2c1, (addr << 1), 3, 10) == HAL_OK) {
+            char buf[32];
+            int n = snprintf(buf, sizeof(buf), "  - Found device @ 0x%02X\r\n", addr);
+            if (n > 0)
+                HAL_UART_Transmit(&huart1, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+        }
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -165,15 +183,33 @@ static bool BMP388_Configure(void)
 
 bool BMP388_Init(void)
 {
-    uint8_t id;
+    uint8_t id = 0;
     uint8_t addrs[2] = { BMP388_I2C_ADDR1, BMP388_I2C_ADDR2 };
     for (int i = 0; i < 2; i++) {
         bmp_addr = addrs[i];
-        if (bmp388_read_regs(BMP388_CHIP_ID_REG, &id, 1) && (id == 0x50 || id == 0x60))
+        if (bmp388_read_regs(BMP388_CHIP_ID_REG, &id, 1) &&
+            (id == BMP388_CHIP_ID_BMP3 || id == BMP388_CHIP_ID_BMP390)) {
+            bmp388_i2c_addr = addrs[i];
             break;
+        }
         if (i == 1)
             return false;
     }
+
+    // Print chip ID and detected address for debugging
+    {
+        uint8_t addr7 = bmp388_i2c_addr >> 1;
+        char msg[80];
+        int len = snprintf(msg, sizeof(msg),
+            "BMP388 CHIP ID       = 0x%02X\r\n"
+            "BMP388 I2C addr (7b) = 0x%02X\r\n"
+            "BMP388 I2C addr (8b) = 0x%02X\r\n",
+            id, addr7, bmp388_i2c_addr);
+        if (len > 0 && len <= (int)sizeof(msg))
+            HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)len, HAL_MAX_DELAY);
+    }
+
+    bus_scan();
 
     if (!bmp388_write_reg(BMP388_CMD_REG, BMP388_CMD_SOFTRESET))
         return false;
