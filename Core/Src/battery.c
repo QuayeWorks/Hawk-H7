@@ -19,6 +19,7 @@
 #define INA219_REG_BUSVOLTAGE    0x02
 
 static I2C_HandleTypeDef *hi2cBatt;
+static ADC_HandleTypeDef *hadcBatt = NULL;
 static float shuntResistance;
 static float voltageDivider;
 static uint8_t cellCount;
@@ -26,6 +27,9 @@ static float totalCapacity_mAh;
 
 static float consumed_mAh = 0.0f;
 static uint32_t lastTickMs = 0;
+
+#define ADC_REF_VOLTAGE 3.3f
+#define ADC_MAX_VALUE   4095.0f
 
 /// Raw reading helpers
 static bool INA219_ReadRegister(uint8_t reg, uint16_t *out) {
@@ -37,8 +41,9 @@ static bool INA219_ReadRegister(uint8_t reg, uint16_t *out) {
     return true;
 }
 
-void Battery_Init(I2C_HandleTypeDef *hi2c, float shuntOhm) {
+void Battery_Init(I2C_HandleTypeDef *hi2c, ADC_HandleTypeDef *hadc, float shuntOhm) {
     hi2cBatt        = hi2c;
+    hadcBatt        = hadc;
     shuntResistance = shuntOhm;
     voltageDivider  = Settings_GetBatteryVoltDivider();
     cellCount       = Settings_GetBatteryCellCount();
@@ -60,15 +65,17 @@ void Battery_Tick(uint32_t now_ms) {
 }
 
 float Battery_ReadPackVoltage(void) {
-    uint16_t raw;
-    if (!INA219_ReadRegister(INA219_REG_BUSVOLTAGE, &raw)) {
+    if (hadcBatt == NULL) {
         return 0.0f;
     }
-    // Bits [15:13] are flag bits, per datasheet discard them:
-    uint16_t voltsRaw = raw >> 3;    // 13-bit value
-    // LSB = 4 mV per datasheet
-    float volts = voltsRaw * 0.004f; // V at INA input
-    return volts * voltageDivider;   // real pack voltage
+
+    HAL_ADC_Start(hadcBatt);
+    HAL_ADC_PollForConversion(hadcBatt, HAL_MAX_DELAY);
+    uint32_t raw = HAL_ADC_GetValue(hadcBatt);
+    HAL_ADC_Stop(hadcBatt);
+
+    float volts = ((float)raw / ADC_MAX_VALUE) * ADC_REF_VOLTAGE;
+    return volts * voltageDivider;
 }
 
 float Battery_ReadCurrent(void) {

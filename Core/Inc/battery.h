@@ -15,7 +15,7 @@
 /*
  * Battery & Power Management Driver
  *
- * - Call Battery_Init(&hi2c, shunt_ohm) once at startup.
+ * - Call Battery_Init(&hi2c, &hadc, shunt_ohm) once at startup.
  * - Regularly call Battery_Tick(now_ms) to integrate capacity.
  * - Use Battery_ReadPackVoltage() and Battery_ReadCurrent() to get live readings.
  * - Use Battery_GetRemaining_mAh() or Battery_GetRemainingPercent() for capacity.
@@ -24,8 +24,11 @@
 
 /// Initialize battery monitoring.
 ///   • hi2c: handle for I2C to INA219.
+///   • hadc: ADC handle for battery voltage measurement (e.g. PH2 channel).
 ///   • shuntOhm: value of the external shunt resistor in ohms.
-void       Battery_Init(I2C_HandleTypeDef *hi2c, float shuntOhm);
+void       Battery_Init(I2C_HandleTypeDef *hi2c,
+                        ADC_HandleTypeDef *hadc,
+                        float shuntOhm);
 
 /// Must be called periodically (e.g. in your 1 kHz tick or main loop).
 ///   • now_ms: HAL_GetTick() current time in ms.
