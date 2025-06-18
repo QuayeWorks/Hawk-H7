@@ -10,6 +10,8 @@
 #include "compass.h"
 #include "baro.h"
 #include "battery.h"
+#include "gps.h"
+#include "sonar.h"
 #include "rc_input.h"
 #include "buzzer.h"
 #include <string.h>
@@ -38,7 +40,7 @@ static void send(const char *s)
 static void show_menu(void)
 {
     send("\r\n--- Debug Menu ---\r\n");
-    send("h: help\r\ns: sensors\r\np: ppm\r\nb: buzzer test\r\n> ");
+    send("h: help\r\ns: sensors\r\np: ppm\r\no: sonar\r\ng: gps\r\nb: buzzer test\r\n> ");
 }
 
 void DebugMenu_Init(UART_HandleTypeDef *huart)
@@ -56,6 +58,8 @@ static void show_help(void)
     send("Commands:\r\n");
     send("  s  show sensor data\r\n");
     send("  p  show PPM channels\r\n");
+    send("  o  show sonar distances\r\n");
+    send("  g  show GPS info\r\n");
     send("  b  play error tones\r\n");
     send("  h  this help\r\n");
 }
@@ -136,6 +140,34 @@ static void show_ppm(void)
     send("\r\n");
 }
 
+static void show_sonar(void)
+{
+    char buf[32];
+    send("SONAR:");
+    for(uint8_t i = 0; i < SONAR_COUNT; i++) {
+        float d = Sonar_ReadDistance(i);
+        int n = snprintf(buf, sizeof(buf), " %.2f", d);
+        if (n > 0) {
+            HAL_UART_Transmit(dbgUart, (uint8_t *)buf, (uint16_t)n, HAL_MAX_DELAY);
+        }
+    }
+    send(" m\r\n");
+}
+
+static void show_gps(void)
+{
+    char buf[128];
+    if (!GPS_HasFix()) {
+        send("GPS: no fix\r\n");
+        return;
+    }
+    int len = snprintf(buf, sizeof(buf),
+                       "GPS: lat=%.6f lon=%.6f alt=%.1f sats=%u hdop=%.1f\r\n",
+                       GPS_GetLatitude(), GPS_GetLongitude(), GPS_GetAltitude(),
+                       GPS_GetSatCount(), GPS_GetHDOP());
+    HAL_UART_Transmit(dbgUart, (uint8_t *)buf, len, HAL_MAX_DELAY);
+}
+
 static void test_buzzer(void)
 {
     for(Buzzer_ToneID t=TONE_ERROR_IMU; t<=TONE_ERROR_MOTOR; t++) {
@@ -152,6 +184,12 @@ static void process_actions(void)
     }
     if (actionMask & DEBUG_MENU_PPM) {
         show_ppm();
+    }
+    if (actionMask & DEBUG_MENU_SONAR) {
+        show_sonar();
+    }
+    if (actionMask & DEBUG_MENU_GPS) {
+        show_gps();
     }
     if (actionMask & DEBUG_MENU_BUZZER) {
         test_buzzer();
@@ -183,6 +221,10 @@ static void handle_cmd(void)
         show_sensors();
     } else if(strcmp(cmdBuf,"p") == 0) {
         show_ppm();
+    } else if(strcmp(cmdBuf,"o") == 0) {
+        show_sonar();
+    } else if(strcmp(cmdBuf,"g") == 0) {
+        show_gps();
     } else if(strcmp(cmdBuf,"b") == 0) {
         test_buzzer();
     } else {
