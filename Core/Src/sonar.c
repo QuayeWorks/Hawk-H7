@@ -45,15 +45,20 @@ void Sonar_TriggerAll(void) {
 
 void Sonar_EchoCallback(uint8_t index, GPIO_PinState state) {
     if (index >= SONAR_COUNT) return;
-    uint32_t now = DWT->CYCCNT;  // microsecond resolution
+    uint32_t now = DWT->CYCCNT;  // raw cycle counter
     if (state == GPIO_PIN_SET) {
         // Rising edge: record start
         riseTime[index] = now;
     } else {
         // Falling edge: compute pulse width and distance
         uint32_t width = now - riseTime[index];
-        // speed of sound ~343 m/s => 0.0343 cm/µs => distance = (width * 0.0343) / 2
-        float dist = (width * 0.000343f) / 2.0f;
+        /*
+         * Convert cycle width to seconds. DWT->CYCCNT increments at the
+         * SystemCoreClock frequency, so dividing by this yields seconds.
+         * Distance is then (time * speed_of_sound)/2.
+         */
+        float time_s = (float)width / (float)SystemCoreClock;
+        float dist = (time_s * 343.0f) / 2.0f;
         if (dist > MAX_DISTANCE_M) dist = MAX_DISTANCE_M;
         lastDistance[index] = dist;
     }
