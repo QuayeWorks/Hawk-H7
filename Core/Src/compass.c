@@ -8,9 +8,20 @@ static float hardX, hardY, hardZ;
 
 void Compass_Init(I2C_HandleTypeDef *i2c_handle) {
     hi2c_comp = i2c_handle;
-    // Put into continuous measurement mode, 200Hz, ±8 Gauss
-    uint8_t cfg1[3] = { QMC5883L_REG_CONF1, 0x1D, 0x00 }; // OSR=512, RNG=8G, ODR=200Hz, MODE=Continuous
-    HAL_I2C_Master_Transmit(hi2c_comp, QMC5883L_I2C_ADDR, cfg1, 3, HAL_MAX_DELAY);
+    // Reset
+    uint8_t rst[2] = { QMC5883L_REG_CONF2, 0x80 };
+    HAL_I2C_Master_Transmit(hi2c_comp, QMC5883L_I2C_ADDR, rst, 2, HAL_MAX_DELAY);
+    HAL_Delay(10);
+    // ID check (optional)
+    uint8_t id;
+    if (HAL_I2C_Mem_Read(hi2c_comp, QMC5883L_I2C_ADDR, QMC5883L_REG_CHIP_ID, 1, &id, 1, HAL_MAX_DELAY) == HAL_OK) {
+        (void)id;
+    }
+    // Continuous mode 200Hz, ±8G
+    uint8_t cfg1[2] = { QMC5883L_REG_CONF1, 0x1D };
+    HAL_I2C_Master_Transmit(hi2c_comp, QMC5883L_I2C_ADDR, cfg1, 2, HAL_MAX_DELAY);
+    uint8_t sr[2] = { QMC5883L_REG_SET_RESET_PERIOD, 0x01 };
+    HAL_I2C_Master_Transmit(hi2c_comp, QMC5883L_I2C_ADDR, sr, 2, HAL_MAX_DELAY);
 }
 
 void Compass_LoadCalibration(float sX, float sY, float sZ,
@@ -23,13 +34,14 @@ void Compass_LoadCalibration(float sX, float sY, float sZ,
 bool Compass_ReadRaw(int16_t *mx, int16_t *my, int16_t *mz) {
     // Check DRDY in status register
     uint8_t status;
-    HAL_I2C_Mem_Read(hi2c_comp, QMC5883L_I2C_ADDR, QMC5883L_REG_STATUS, 1, &status, 1, HAL_MAX_DELAY);
-    if (!(status & 0x01)) return false;
+    if (HAL_I2C_Mem_Read(hi2c_comp, QMC5883L_I2C_ADDR, QMC5883L_REG_STATUS, 1, &status, 1, HAL_MAX_DELAY) != HAL_OK)
+        return false;
+    if (!(status & QMC5883L_STATUS_DRDY_MASK))
+        return false;
 
     uint8_t raw[6];
-    uint8_t reg = QMC5883L_REG_DATA;
-    HAL_I2C_Master_Transmit(hi2c_comp, QMC5883L_I2C_ADDR, &reg, 1, HAL_MAX_DELAY);
-    HAL_I2C_Master_Receive(hi2c_comp, QMC5883L_I2C_ADDR, raw, 6, HAL_MAX_DELAY);
+    if (HAL_I2C_Mem_Read(hi2c_comp, QMC5883L_I2C_ADDR, QMC5883L_REG_DATA, 1, raw, 6, HAL_MAX_DELAY) != HAL_OK)
+        return false;
 
     int16_t X = (int16_t)((uint16_t)raw[1] << 8 | raw[0]);
     int16_t Y = (int16_t)((uint16_t)raw[3] << 8 | raw[2]);
