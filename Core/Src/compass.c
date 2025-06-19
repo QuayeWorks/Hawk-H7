@@ -1,5 +1,4 @@
 #include "compass.h"
-#include "qmc5883l.h"   // low-level register definitions
 #include <math.h>
 
 static I2C_HandleTypeDef *hi2c_comp;
