@@ -3,7 +3,8 @@
 #include "main.h"  // for TRIGx pin definitions
 
 #define TRIG_PULSE_US    10   // 10 µs pulse
-#define MAX_DISTANCE_M   6.0f // 6 m max
+// Maximum measurable distance (meters)
+#define MAX_DISTANCE_M   4.0f // 4 m max
 #define SONAR_TIMEOUT_MS 40   // ~6 m round trip
 
 
@@ -83,7 +84,13 @@ void Sonar_EchoCallback(uint8_t index, GPIO_PinState state) {
 
 float Sonar_ReadDistance(uint8_t index) {
     if (index < SONAR_COUNT) {
-        return lastDistance[index];
+        float d = lastDistance[index];
+        // When no echo was received, distance is negative. Report zero
+        // to indicate an invalid or missing reading.
+        if (d < 0.0f) {
+            return 0.0f;
+        }
+        return d;
     }
-    return MAX_DISTANCE_M;
+    return 0.0f;
 }
