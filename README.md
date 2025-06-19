@@ -82,6 +82,14 @@ Take your drone projects from standard to exceptional with the QuayeWorks Hawk-H
     
   - Advanced DIY Drone Enthusiasts
 
+## GPS Setup
+
+The UART used for GPS (USART6) defaults to **57600 bps**. If your GPS module
+operates at a different rate—such as the NEO‑6M running at 9600 bps—edit
+`settings.ini` and change the `gps_baud` value accordingly. The firmware
+initializes the UART using this setting during startup, so be sure it matches
+your module's configuration.
+
 Elevate your drone’s capabilities with the QuayeWorks Hawk-H7—where advanced flight control meets cutting-edge artificial intelligence.
 
 Disclaimer: The QuayeWorks Hawk-H7 hardware and software are intended solely for responsible and legal use. By using these materials, you agree that QuayeWorks (or the creator) shall not be held liable for any misuse, harm, or illegal activities involving this product. Users assume full responsibility for their actions and agree to comply with applicable laws and regulations.
