@@ -2,8 +2,9 @@
 #include "stm32h7xx_hal.h"
 #include "main.h"  // for TRIGx pin definitions
 
-#define TRIG_PULSE_US   10   // 10 µs pulse
-#define MAX_DISTANCE_M  6.0f // 6 m max
+#define TRIG_PULSE_US    10   // 10 µs pulse
+#define MAX_DISTANCE_M   6.0f // 6 m max
+#define SONAR_TIMEOUT_MS 40   // ~6 m round trip
 
 
 // Map of trigger GPIO pins per sonar
@@ -17,6 +18,8 @@ static const struct {
 };
 
 static uint32_t riseTime[SONAR_COUNT];
+static uint32_t trigTick[SONAR_COUNT];
+static bool     gotEcho[SONAR_COUNT];
 static float    lastDistance[SONAR_COUNT];
 
 void Sonar_Init(void) {
@@ -24,21 +27,33 @@ void Sonar_Init(void) {
     for (int i = 0; i < SONAR_COUNT; i++) {
         HAL_GPIO_WritePin(trigPins[i].port, trigPins[i].pin, GPIO_PIN_RESET);
     }
-    // Clear last distances
+    uint32_t now = HAL_GetTick();
     for (int i = 0; i < SONAR_COUNT; i++) {
-        lastDistance[i] = MAX_DISTANCE_M;
+        trigTick[i]    = now;
+        gotEcho[i]     = false;
+        lastDistance[i] = -1.0f; // no reading yet
     }
 }
 
 void Sonar_TriggerAll(void) {
-    // Send 10µs high on all trigger pins
+    uint32_t now = HAL_GetTick();
     for (int i = 0; i < SONAR_COUNT; i++) {
+        // If previous trigger produced no echo within the timeout,
+        // mark reading invalid
+        if (!gotEcho[i] && (now - trigTick[i]) >= SONAR_TIMEOUT_MS) {
+            lastDistance[i] = -1.0f;
+        }
+        // Prepare for this cycle
+        gotEcho[i]  = false;
+        trigTick[i] = now;
         HAL_GPIO_WritePin(trigPins[i].port, trigPins[i].pin, GPIO_PIN_SET);
     }
+
     // Busy‐wait 10µs
     uint32_t start = DWT->CYCCNT;
     uint32_t delayTicks = (HAL_RCC_GetHCLKFreq()/1000000) * TRIG_PULSE_US;
     while ((DWT->CYCCNT - start) < delayTicks);
+
     for (int i = 0; i < SONAR_COUNT; i++) {
         HAL_GPIO_WritePin(trigPins[i].port, trigPins[i].pin, GPIO_PIN_RESET);
     }
@@ -61,6 +76,7 @@ void Sonar_EchoCallback(uint8_t index, GPIO_PinState state) {
         float time_s = (float)width / (float)SystemCoreClock;
         float dist = (time_s * 343.0f) / 2.0f;
         if (dist > MAX_DISTANCE_M) dist = MAX_DISTANCE_M;
+        gotEcho[index]     = true;
         lastDistance[index] = dist;
     }
 }
