@@ -40,7 +40,8 @@ static float  baro_tolHpa          = 10.0f;
 static float  baro_altOffset       = 0.0f;
 
 static bool   sonar_enabled        = false;
-static float  sonar_maxDistance    = 6.0f;
+// Maximum range of the sonar in meters
+static float  sonar_maxDistance    = 4.0f;
 static float  sonar_minDistance    = 0.2f;
 static uint16_t sonar_updateRateHz = 10;
 static float  sonar_groundOffset   = 0.0f;
