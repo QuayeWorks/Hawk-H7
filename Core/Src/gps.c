@@ -68,6 +68,14 @@ void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
 void GPS_Init(UART_HandleTypeDef *huart) {
     gpsUart   = huart;
+
+    // Reconfigure UART baud rate from settings before starting reception.
+    gpsUart->Init.BaudRate = Settings_GetGPSBaud();
+    HAL_UART_DeInit(gpsUart);
+    if (HAL_UART_Init(gpsUart) != HAL_OK) {
+        // If re-init fails, GPS comms won't work but we'll continue running.
+    }
+
     lineIdx   = 0;
     gpsData.hasFix   = false;
     gpsData.satCount = 0;
