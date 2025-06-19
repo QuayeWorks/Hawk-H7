@@ -6,7 +6,6 @@
  */
 
 #include "imu.h"
-#include "mpu6050_reg.h"    // register addresses for MPU6050
 #include "flight_state.h"
 #include "settings.h"
 #include <string.h>
