@@ -21,15 +21,12 @@ bool Battery_OverCurrent(void)
 
 bool MCU_OverTemp(void)
 {
-    extern ADC_HandleTypeDef hadc1;  // ADC configured to read internal temp
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 10);
-    uint32_t raw = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-    const float vref   = 3.3f;
-    float vsense       = ((float)raw * vref) / 4095.0f;
-    float temperatureC = (vsense - 0.76f) / 0.0025f + 25.0f;
-    return temperatureC > 80.0f;    // 80°C threshold
+    /* This board does not provide an MCU temperature sensor yet. The
+     * implementation is therefore a stub and simply reports no over-temp
+     * condition.  Once a suitable ADC channel is wired up, replace this stub
+     * with real temperature measurement logic.
+     */
+    return false;
 }
 
 bool ESC_OverTemp(void)
