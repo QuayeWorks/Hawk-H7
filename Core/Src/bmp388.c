@@ -158,7 +158,11 @@ bool BMP388_ReadOneShot(float *press, float *temp)
 {
     if (!BMP388_TriggerOneShot())
         return false;
-    if (!BMP388_WaitForData(10))
+    // Allow enough time for the conversion based on oversampling settings.
+    // The previous 10ms timeout was occasionally too short, leading to
+    // sporadic read failures. 25ms comfortably covers the worst case
+    // conversion time with the current configuration.
+    if (!BMP388_WaitForData(25))
         return false;
     int32_t ip, it;
     if (!BMP388_ReadPressureTempInt(&ip, &it))
