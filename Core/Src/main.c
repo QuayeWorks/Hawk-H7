@@ -31,6 +31,7 @@
 #include "gps.h"
 #include "rc_input.h"   // RC/PPM reading library
 #include "motor.h"      // ESC/PWM library
+#include "servo.h"
 #include "telemetry.h"
 #include "geofence.h"
 #include "failsafe.h"
@@ -238,6 +239,7 @@ int main(void)
   DebugMenu_SetActionMask(DEBUG_MENU_PPM);
 
   Motor_Init();      // ESC PWM outputs
+  Servo_Init();
 
 
 
@@ -742,6 +744,9 @@ int main(void)
         }
     }
     //DebugMsg("failsafe checks done\r\n");
+
+    // Update servos using RC channels and gimbal mode
+    Servo_Task(DebugMenu_GetActionMask());
 
     // 17) Telemetry & LED updates
     if (Settings_GetTelemetryEnabled()) {

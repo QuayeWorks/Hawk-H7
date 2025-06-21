@@ -15,6 +15,7 @@
 #include "settings.h"
 #include "rc_input.h"
 #include "buzzer.h"
+#include "servo.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -41,7 +42,7 @@ static void send(const char *s)
 static void show_menu(void)
 {
     send("\r\n--- Debug Menu ---\r\n");
-    send("h: help\r\ns: sensors\r\np: ppm\r\no: sonar\r\ng: gps\r\nb: buzzer test\r\n> ");
+    send("h: help\r\ns: sensors\r\np: ppm\r\no: sonar\r\ng: gps\r\nb: buzzer test\r\nv: servo test\r\n> ");
 }
 
 void DebugMenu_Init(UART_HandleTypeDef *huart)
@@ -62,6 +63,7 @@ static void show_help(void)
     send("  o  show sonar distances\r\n");
     send("  g  show GPS info\r\n");
     send("  b  play error tones\r\n");
+    send("  v  servo test\r\n");
     send("  h  this help\r\n");
 }
 
@@ -192,6 +194,25 @@ static void test_buzzer(void)
     Buzzer_Stop();
 }
 
+static void servo_debug(void)
+{
+    for (uint16_t p = 1000; p <= 2000; p += 20) {
+        Servo_SetPWM(0, RC_GetChannel(0));
+        Servo_SetPWM(1, RC_GetChannel(1));
+        Servo_SetPWM(2, RC_GetChannel(5));
+        Servo_SetPWM(3, p);
+        HAL_Delay(20);
+    }
+    for (uint16_t p = 2000; p >= 1000; p -= 20) {
+        Servo_SetPWM(0, RC_GetChannel(0));
+        Servo_SetPWM(1, RC_GetChannel(1));
+        Servo_SetPWM(2, RC_GetChannel(5));
+        Servo_SetPWM(3, p);
+        HAL_Delay(20);
+        if (p <= 1000) break;
+    }
+}
+
 static void process_actions(void)
 {
     if (actionMask & DEBUG_MENU_SENSORS) {
@@ -242,6 +263,8 @@ static void handle_cmd(void)
         show_gps();
     } else if(strcmp(cmdBuf,"b") == 0) {
         test_buzzer();
+    } else if(strcmp(cmdBuf,"v") == 0) {
+        servo_debug();
     } else {
         show_help();
     }
