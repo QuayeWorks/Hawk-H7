@@ -199,7 +199,7 @@ bool BMP388_Init(void)
     // Print chip ID and detected address for debugging
     {
         uint8_t addr7 = bmp388_i2c_addr >> 1;
-        char msg[80];
+        char msg[96];
         int len = snprintf(msg, sizeof(msg),
             "BMP388 CHIP ID       = 0x%02X\r\n"
             "BMP388 I2C addr (7b) = 0x%02X\r\n"
