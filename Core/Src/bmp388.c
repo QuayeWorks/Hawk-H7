@@ -188,7 +188,7 @@ bool BMP388_Init(void)
     for (int i = 0; i < 2; i++) {
         bmp_addr = addrs[i];
         if (bmp388_read_regs(BMP388_CHIP_ID_REG, &id, 1) &&
-            (id == BMP388_CHIP_ID_BMP3 || id == BMP388_CHIP_ID_BMP390)) {
+            (id == 0x50 || id == 0x60)) {
             bmp388_i2c_addr = addrs[i];
             break;
         }
