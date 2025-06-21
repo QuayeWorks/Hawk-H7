@@ -174,6 +174,23 @@ bool BMP388_ReadOneShot(float *press, float *temp)
     return true;
 }
 
+bool BMP388_ReadContinuous(float *press, float *temp)
+{
+    // Wait for a fresh measurement in normal mode. This mirrors the
+    // timeout used by the one-shot path, ensuring data is ready without
+    // blocking excessively.
+    if (!BMP388_WaitForData(25))
+        return false;
+    int32_t ip, it;
+    if (!BMP388_ReadPressureTempInt(&ip, &it))
+        return false;
+    if (press)
+        *press = (float)ip / 100.0f;      // Pa to hPa
+    if (temp)
+        *temp = (float)it / 100.0f;       // 0.01°C -> °C
+    return true;
+}
+
 static bool BMP388_Configure(void)
 {
     uint8_t osr = ((0x03 & BMP388_OSR_P_MASK) << BMP388_OSR_P_BIT) |

@@ -14,7 +14,7 @@
 /*
  * BMP388 Barometer driver.
  * - Call Baro_Init(&hi2c1) once at startup.
- * - Call Baro_ReadPressure(&pressure_hPa) to get pressure in hPa (blocking ~5ms).
+ * - Call Baro_ReadPressure(&pressure_hPa) to get pressure in hPa.
  * - Call Baro_GetAltitude(&alt_m) to compute altitude from the last pressure and
  *   the sea-level reference from settings.
  */

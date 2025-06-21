@@ -7,9 +7,11 @@ static I2C_HandleTypeDef *hi2c_baro;
 
 // Trigger + read blocking
 bool Baro_ReadPressure(float *pressure_hPa) {
-    // Trigger one-shot conversion and read compensated value
+    // Read a freshly updated sample from the barometer running in
+    // continuous mode.
     float p, t;
-    if (!BMP388_ReadOneShot(&p, &t)) return false;
+    if (!BMP388_ReadContinuous(&p, &t))
+        return false;
     *pressure_hPa = p; // already in hPa
     return true;
 }

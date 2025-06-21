@@ -91,6 +91,15 @@ bool BMP388_WaitForData(uint32_t timeout_ms);
  */
 bool BMP388_ReadOneShot(float *pressure, float *temperature);
 
+/**
+ * @brief Reads the latest pressure and temperature sample when the sensor is
+ *        running in continuous mode.
+ * @param pressure Pointer to receive pressure in Pa.
+ * @param temperature Pointer to receive temperature in °C.
+ * @return true on success, false on I2C error or timeout.
+ */
+bool BMP388_ReadContinuous(float *pressure, float *temperature);
+
 // Raw and compensated access helpers
 bool    BMP388_ReadRaw(uint32_t *p, uint32_t *t);
 int64_t BMP388_CompensateTemperature(uint32_t uncomp_temperature);
