@@ -13,7 +13,6 @@
 // Innovation values (Mahalanobis distances) for each sensor
 static float innovGPS;
 static float innovMag;
-static float innovBaro;
 // You may add innovFlow or others if you have an optical‐flow sensor
 
 // Internal timer (ms) since EKF_Init
@@ -22,7 +21,7 @@ static uint32_t ekfTimeMs;
 /// Initialize internal state
 void EKF_Init(void) {
     ekfTimeMs = 0;
-    innovGPS  = innovMag = innovBaro = 0.0f;
+    innovGPS  = innovMag = 0.0f;
     // If you have state / covariance matrices, initialize them here
 }
 
@@ -49,15 +48,6 @@ void EKF_PublishMag(float heading_deg)
     innovMag = (threshold > 0) ? (fabsf(residual)/threshold) : 0.0f;
 }
 
-void EKF_PublishBaro(float altitude_m)
-{
-    // Example: update EKF vertical position
-    //   update_state_from_baro(altitude_m);
-
-    float threshold = Settings_GetEKFInnovationBaro();
-    float residual = 0.0f;  // replace with (measAlt - predAlt)
-    innovBaro = (threshold > 0) ? (fabsf(residual)/threshold) : 0.0f;
-}
 
 void EKF_PublishGPS(double lat, double lon, float alt)
 {
@@ -74,8 +64,8 @@ void EKF_PublishGPS(double lat, double lon, float alt)
 void EKF_UpdateSensors(void)
 {
     // 1) Propagate state by IMU (if using inertial nav)
-    // 2) Incorporate magnetometer, baro, GPS measurements
-    // 3) Compute actual Mahalanobis distances and store in innovGPS/innovMag/innovBaro
+    // 2) Incorporate magnetometer and GPS measurements
+    // 3) Compute actual Mahalanobis distances and store in innovGPS/innovMag
 
     // --- Stubs above already set innov* values in PublishXxx() ---
 
@@ -87,8 +77,7 @@ void EKF_UpdateSensors(void)
 bool EKF_AllInnovationGatesOK(void)
 {
     return (innovGPS  <= 1.0f)
-        && (innovMag  <= 1.0f)
-        && (innovBaro <= 1.0f);
+        && (innovMag  <= 1.0f);
 }
 
 /// Returns true after the filter has had time to converge:

@@ -81,21 +81,6 @@ bool    Settings_GetCompassAutoSave(void);
 void    Settings_SetCompassAutoSave(bool on);
 
 //-----------------------------------------------------------------------------
-// [BARO] → BMP388 Barometer Settings
-//-----------------------------------------------------------------------------
-bool    Settings_GetBaroEnabled(void);
-void    Settings_SetBaroEnabled(bool on);
-
-float   Settings_GetBaroPressureOffset(void);
-void    Settings_SetBaroPressureOffset(float v);
-
-float   Settings_GetBaroTolHpa(void);
-void    Settings_SetBaroTolHpa(float v);
-
-float   Settings_GetBaroAltOffset(void);
-void    Settings_SetBaroAltOffset(float v);
-
-//-----------------------------------------------------------------------------
 // [SONAR] → Rangefinder/Sonar Settings
 //-----------------------------------------------------------------------------
 bool    Settings_GetSonarEnabled(void);
@@ -232,9 +217,6 @@ void     Settings_SetEKFInnovationGPS(float v);
 
 float    Settings_GetEKFInnovationMag(void);
 void     Settings_SetEKFInnovationMag(float v);
-
-float    Settings_GetEKFInnovationBaro(void);
-void     Settings_SetEKFInnovationBaro(float v);
 
 float    Settings_GetEKFGyroNoiseSigma(void);
 void     Settings_SetEKFGyroNoiseSigma(float v);

@@ -18,7 +18,6 @@
  *   • On each new sensor sample, call one of:
  *       EKF_PublishIMU(ax,ay,az,gx,gy,gz);
  *       EKF_PublishMag(heading);
- *       EKF_PublishBaro(altitude);
  *       EKF_PublishGPS(lat,lon,alt);
  *   • Then call EKF_UpdateSensors() once (e.g. at 200 Hz).
  *   • Query:
@@ -36,8 +35,6 @@ void EKF_PublishIMU(float ax, float ay, float az,
 /// Feed compass heading (° [0–360)) into the filter.
 void EKF_PublishMag(float heading_deg);
 
-/// Feed baro‐derived altitude (m) into the filter.
-void EKF_PublishBaro(float altitude_m);
 
 /// Feed GPS position & altitude (degrees, degrees, m) into the filter.
 void EKF_PublishGPS(double lat, double lon, float alt);

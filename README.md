@@ -34,9 +34,7 @@ Take your drone projects from standard to exceptional with the QuayeWorks Hawk-H
   
   - MPU6050 IMU for accurate flight stabilization.
     
-  - BMP388 barometric sensor for precise altitude measurements.
-    
-  - MC5883 magnetometer for navigation and orientation.
+  - Memory-based magnetometer derived from the IMU for orientation.
     
   - INA219 voltage/current sensor ensures optimal power management.
     
@@ -64,7 +62,7 @@ Take your drone projects from standard to exceptional with the QuayeWorks Hawk-H
     
   - Video OSD: AT7456E with dedicated Video In (CN11) and Video Out (CN12)
     
-  - Sensors: MPU6050 (6-axis IMU), BMP388 (Barometer), QMC5883 (Magnetometer), INA219 (Voltage/Current Monitor)
+  - Sensors: MPU6050 (6-axis IMU), memory magnetometer, INA219 (Voltage/Current Monitor)
     
   - Additional Interfaces: MicroSD Card, GPS connector, Sonar connector, USB-to-Serial (CH340C)
     

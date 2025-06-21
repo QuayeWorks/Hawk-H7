@@ -34,10 +34,6 @@ static float  compass_hardIronZ    = 0.0f;
 static float  compass_mahaThresh   = 4.0f;
 static bool   compass_autoSave     = true;
 
-static bool   baro_enabled         = true;
-static float  baro_pressureOffset  = 1013.25f;
-static float  baro_tolHpa          = 10.0f;
-static float  baro_altOffset       = 0.0f;
 
 static bool   sonar_enabled        = false;
 // Maximum range of the sonar in meters
@@ -85,7 +81,6 @@ static uint32_t ina219_maxAmps     = 30;
 static bool     ekf_enabled         = true;
 static float    ekf_innovGPS        = 5.0f;
 static float    ekf_innovMag        = 4.0f;
-static float    ekf_innovBaro       = 3.0f;
 static float    ekf_gyroNoiseSigma  = 0.000174f;
 static float    ekf_accelNoiseSigma = 0.01f;
 static float    ekf_minObsTime      = 2.0f;
@@ -239,7 +234,6 @@ bool Settings_Save(void) {
         f_puts("; Sections:\n", &file);
         f_puts(";   [IMU]           → Accelerometer & Gyro calibration offsets\n", &file);
         f_puts(";   [COMPASS]       → Magnetometer calibration & enabling\n", &file);
-        f_puts(";   [BARO]          → Barometer (BMP388) configuration\n", &file);
         f_puts(";   [SONAR]         → Rangefinder/sonar configuration\n", &file);
         f_puts(";   [GPS]           → GPS-related settings & thresholds\n", &file);
         f_puts(";   [RC]            → RC input mapping, RSSI thresholds, stick‐arming\n", &file);
@@ -304,18 +298,6 @@ bool Settings_Save(void) {
     snprintf(buf, sizeof(buf), "compass_auto_save      = %d\n\n", compass_autoSave ? 1 : 0);
     f_puts(buf, &file);
 
-    // -- [BARO] --
-    f_puts("[BARO]\n", &file);
-    f_puts("; ─── BMP388 Barometer Settings ───\n", &file);
-    snprintf(buf, sizeof(buf), "baro_enabled           = %d\n", baro_enabled ? 1 : 0);
-    f_puts(buf, &file);
-    snprintf(buf, sizeof(buf), "baro_pressure_offset   = %.6f\n", baro_pressureOffset);
-    f_puts(buf, &file);
-    snprintf(buf, sizeof(buf), "baro_tol_hpa           = %.6f\r\n", baro_tolHpa);
-    f_puts(buf, &file);
-    f_puts("; “baro_alt_offset” can store a ground‐level altitude reference if needed\n", &file);
-    snprintf(buf, sizeof(buf), "baro_alt_offset        = %.6f\n\n", baro_altOffset);
-    f_puts(buf, &file);
 
     // -- [SONAR] --
     f_puts("[SONAR]\n", &file);
@@ -423,8 +405,6 @@ bool Settings_Save(void) {
     f_puts(buf, &file);
     snprintf(buf, sizeof(buf), "ekf_innovation_mag         = %.6f\n", ekf_innovMag);
     f_puts(buf, &file);
-    snprintf(buf, sizeof(buf), "ekf_innovation_baro        = %.6f\n", ekf_innovBaro);
-    f_puts(buf, &file);
     snprintf(buf, sizeof(buf), "ekf_gyro_noise_sigma       = %.6f\n", ekf_gyroNoiseSigma);
     f_puts(buf, &file);
     snprintf(buf, sizeof(buf), "ekf_accel_noise_sigma      = %.6f\n", ekf_accelNoiseSigma);
@@ -442,11 +422,10 @@ bool Settings_Save(void) {
     f_puts(";   Each bit in “arming_checks_mask” corresponds to a specific check:\n", &file);
     f_puts(";   Bit 0 = IMU healthy\n", &file);
     f_puts(";   Bit 1 = Compass healthy\n", &file);
-    f_puts(";   Bit 2 = Baro healthy\n", &file);
-    f_puts(";   Bit 3 = Sonar healthy\n", &file);
-    f_puts(";   Bit 4 = GPS healthy\n", &file);
-    f_puts(";   Bit 5 = RC healthy\n", &file);
-    f_puts(";   Bit 6 = Battery healthy\n", &file);
+    f_puts(";   Bit 2 = Sonar healthy\n", &file);
+    f_puts(";   Bit 3 = GPS healthy\n", &file);
+    f_puts(";   Bit 4 = RC healthy\n", &file);
+    f_puts(";   Bit 5 = Battery healthy\n", &file);
     f_puts(";   Bit 7 = EKF healthy\n", &file);
     f_puts(";   Bit 8 = CPU timing OK\n", &file);
     f_puts(";   others = reserved\n", &file);
@@ -733,21 +712,6 @@ static bool iniParseLine(char *line, char *currentSection) {
         }
         return true;
     }
-    else if (strcmp(currentSection, "BARO") == 0) {
-        if (startsWith(key, "baro_enabled")) {
-            baro_enabled = (strtol(value, NULL, 10) != 0);
-        }
-        else if (startsWith(key, "baro_pressure_offset")) {
-            baro_pressureOffset = strtof(value, NULL);
-        }
-        else if (startsWith(key, "baro_tol_hpa")) {
-            baro_tolHpa = strtof(value, NULL);
-        }
-        else if (startsWith(key, "baro_alt_offset")) {
-            baro_altOffset = strtof(value, NULL);
-        }
-        return true;
-    }
     else if (strcmp(currentSection, "SONAR") == 0) {
         if (startsWith(key, "sonar_enabled")) {
             sonar_enabled = (strtol(value, NULL, 10) != 0);
@@ -887,9 +851,6 @@ static bool iniParseLine(char *line, char *currentSection) {
         }
         else if (startsWith(key, "ekf_innovation_mag")) {
             ekf_innovMag = strtof(value, NULL);
-        }
-        else if (startsWith(key, "ekf_innovation_baro")) {
-            ekf_innovBaro = strtof(value, NULL);
         }
         else if (startsWith(key, "ekf_gyro_noise_sigma")) {
             ekf_gyroNoiseSigma = strtof(value, NULL);
@@ -1194,38 +1155,6 @@ void Settings_SetCompassAutoSave(bool on) {
     Settings_Save();
 }
 
-// [BARO]
-bool Settings_GetBaroEnabled(void) {
-    return baro_enabled;
-}
-void Settings_SetBaroEnabled(bool on) {
-    baro_enabled = on;
-    Settings_Save();
-}
-
-float Settings_GetBaroPressureOffset(void) {
-    return baro_pressureOffset;
-}
-void Settings_SetBaroPressureOffset(float v) {
-    baro_pressureOffset = v;
-    Settings_Save();
-}
-
-float Settings_GetBaroTolHpa(void) {
-    return baro_tolHpa;
-}
-void Settings_SetBaroTolHpa(float v) {
-    baro_tolHpa = v;
-    Settings_Save();
-}
-
-float Settings_GetBaroAltOffset(void) {
-    return baro_altOffset;
-}
-void Settings_SetBaroAltOffset(float v) {
-    baro_altOffset = v;
-    Settings_Save();
-}
 
 // [SONAR]
 bool Settings_GetSonarEnabled(void) {
@@ -1560,13 +1489,6 @@ void Settings_SetEKFInnovationMag(float v) {
     Settings_Save();
 }
 
-float Settings_GetEKFInnovationBaro(void) {
-    return ekf_innovBaro;
-}
-void Settings_SetEKFInnovationBaro(float v) {
-    ekf_innovBaro = v;
-    Settings_Save();
-}
 
 float Settings_GetEKFGyroNoiseSigma(void) {
     return ekf_gyroNoiseSigma;

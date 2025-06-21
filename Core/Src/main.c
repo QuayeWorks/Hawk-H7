@@ -27,7 +27,6 @@
 #include "flight_state.h"
 #include "imu.h"        // your MPU6050 driver
 #include "compass.h"    // your QMC5883/MC5883 driver
-#include "baro.h"       // BMP388 driver
 #include "gps.h"
 #include "rc_input.h"   // RC/PPM reading library
 #include "motor.h"      // ESC/PWM library
@@ -218,10 +217,8 @@ int main(void)
   // 3) Initialize all sensor buses & devices
   IMU_Init(&hi2c1);        // begin MPU6050 DMP or raw‐data streaming
   DebugMsg("IMU init done\r\n");
-  Compass_Init(&hi2c1);    // begin QMC5883/MC5883
+  Compass_Init(&hi2c1);    // memory magnetometer
   DebugMsg("Compass init done\r\n");
-  Baro_Init(&hi2c1);       // begin BMP388
-  DebugMsg("Baro init done\r\n");
   GPS_Init(&huart6);      // USART6
   DebugMsg("GPS init done\r\n");
   RC_Input_Init();   // PPM input via TIM2 interrupts
@@ -247,25 +244,7 @@ int main(void)
 #ifndef DEBUG_BYPASS_HEALTH
   // 4) Pre‐arm Calibration (Power ON → IMU level & bias)
 
-  // In pre‐arm calibrations:
-  float p_hPa;
-  if (Baro_ReadPressure(&p_hPa)) {
-      float sea = Settings_GetBaroPressureOffset();
-      if (fabsf(p_hPa - sea) <= Settings_GetBaroTolHpa()) {
-          FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
-      } else {
-          FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_BARO);
-      }
-  }
-
-  // In‐flight health check (put inside your main loop):
-  if (Baro_ReadPressure(&p_hPa)) {
-	  // we read pressure here but don’t need altitude yet
-	  (void)Baro_ComputeAltitude(p_hPa);
-	  } else {
-	      FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-	  }
+  // No barometer available
 
   //    This block runs only once at startup, before any arming is allowed.
   // Declare locals to hold the computed biases
@@ -327,27 +306,7 @@ int main(void)
   }
   DebugMsg("Compass check done\r\n");
 
-  // 6) Barometer pre‐check
-  if (Settings_GetBaroEnabled()) {
-      float pressure_hPa;
-      if (Baro_ReadPressure(&pressure_hPa)) {
-          // pressure_hPa now holds the reading in hPa
-          float seaLevelRef = Settings_GetBaroPressureOffset();
-          if (fabsf(pressure_hPa - seaLevelRef) <= Settings_GetBaroTolHpa()) {
-              FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
-          } else {
-              FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-              Buzzer_PlayTone(TONE_ERROR_BARO);
-          }
-      } else {
-          // I2C read failed
-          FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_BARO);
-      }
-  } else {
-      FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
-  }
-  DebugMsg("Barometer pre-check done\r\n");
+
 
   // 7) Sonar pre‐check (if used)
   if (Settings_GetSonarEnabled()) {
@@ -465,9 +424,6 @@ int main(void)
       float heading = Compass_ComputeHeading(mx, my, mz);
       EKF_PublishMag(heading);
 
-      // assume lastBaroAlt from Baro_ReadPressure()/ComputeAlt
-      float lastBaroAlt = Baro_ComputeAltitude(p_hPa);
-      EKF_PublishBaro(lastBaroAlt);
 
       // assume lat,lon,alt from GPS
       double lat = GPS_GetLatitude();
@@ -489,7 +445,7 @@ int main(void)
 
   // 11) EKF health pre‐check (if you have a ready‐made EKF routine)
   {
-      EKF_UpdateSensors(); // do one update from IMU+GPS+Mag+Baro
+      EKF_UpdateSensors(); // do one update from IMU+GPS+Mag
       if (EKF_AllInnovationGatesOK() && EKF_CovariancesConverged()) {
           FlightState_SetHealth(FS_HEALTH_EKF_OK_BIT);
       } else {
@@ -624,25 +580,9 @@ int main(void)
         Buzzer_PlayTone(TONE_ERROR_COMPASS);
     }
 
-    //    (iii) Baro vs. sonar vs. GPS altitude agreement
-    float pressure_hPa;
-    float baroAlt;
-    if (Baro_ReadPressure(&pressure_hPa)) {
-        baroAlt = Baro_ComputeAltitude(pressure_hPa);
-    } else {
-        // Baro read failed → mark health bit off
-        FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_BARO);
-        // You can choose a fallback altitude here (e.g. 0) or skip further baro checks
-        baroAlt = 0.0f;
-    }
-
+    //    (iii) Altitude checks using GPS only
     float gpsAlt  = GPS_GetAltitude();
     float sonarAlt= Sonar_ReadDistance(0); // treat as altitude above ground
-    if (!Baro_Gps_Sonar_AltitudeAgreement(baroAlt, gpsAlt, sonarAlt)) {
-        FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_BARO);
-    }
 
     //    (iv) GPS: if fix drops below 4 satellites or HDOP > threshold
     if (GPS_GetSatCount() < 4 || GPS_GetHDOP() > Settings_GetGPSMaxHDOP()) {
@@ -1534,7 +1474,6 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(YAW_Buck_EN_GPIO_Port, YAW_Buck_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, BMP388_EN_Pin|QMC5883_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, ARM_Buck_EN_Pin|PITCH_Buck_EN_Pin|ROL_Buck_EN_Pin, GPIO_PIN_RESET);
@@ -1586,12 +1525,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(YAW_Buck_EN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : BMP388_EN_Pin QMC5883_EN_Pin */
-  GPIO_InitStruct.Pin = BMP388_EN_Pin|QMC5883_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ARM_Buck_EN_Pin PITCH_Buck_EN_Pin ROL_Buck_EN_Pin */
   GPIO_InitStruct.Pin = ARM_Buck_EN_Pin|PITCH_Buck_EN_Pin|ROL_Buck_EN_Pin;
