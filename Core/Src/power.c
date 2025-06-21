@@ -25,14 +25,9 @@ static ADC_HandleTypeDef *hadcVolt;
 
 void Power_Init(void) {
 
-	/* Initially Enable I2C for BMP388 using dedicated GPIO pin (ensure these match your schematic) */
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);  // Enable BMP388 I2C
-
-	/* Initially Enable sensors using dedicated GPIO pins (ensure these match your schematic) */
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET); // Enable MPU6050
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_SET);  // Enable BMP388
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_SET);  // Enable QMC5883L
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET); // Enable HC-05
+        /* Enable sensors using dedicated GPIO pins (ensure these match your schematic) */
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET); // Enable MPU6050
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET); // Enable HC-05
 
 	/* Initially Disable the buck converters using dedicated GPIO pins (ensure these match your schematic) */
 	HAL_GPIO_WritePin(GPIOI, GPIO_PIN_0, GPIO_PIN_RESET);  // buckID 0: OFF

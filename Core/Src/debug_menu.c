@@ -8,7 +8,6 @@
 #include "debug_menu.h"
 #include "imu.h"
 #include "compass.h"
-#include "baro.h"
 #include "battery.h"
 #include "gps.h"
 #include "sonar.h"
@@ -83,12 +82,11 @@ static void show_sensors(void)
     IMU_GetAccelMps2(&ax, &ay, &az);
     IMU_GetGyroDPS(&gx, &gy, &gz);
 
-    float pressure = 0.0f;
-    bool baro_ok = Baro_ReadPressure(&pressure);
-    float alt = Baro_ComputeAltitude(pressure);
-
     int16_t mx = 0, my = 0, mz = 0;
     bool mag_ok = Compass_ReadRaw(&mx, &my, &mz);
+    float heading = Compass_ComputeHeading(mx, my, mz);
+
+    float gps_alt = GPS_GetAltitude();
 
     float v = Battery_ReadPackVoltage();
     float i = Battery_ReadCurrent();
@@ -96,14 +94,13 @@ static void show_sensors(void)
     char buf[160];
     int len = snprintf(buf, sizeof(buf),
                        "ACC:%.2f %.2f %.2f GYR:%.2f %.2f %.2f%s\r\n"
-                       "MAG:%d %d %d%s BARO:%.2f hPa %.2f m%s\r\n"
+                       "HDG:%.1f%s GPS_ALT:%.1f m\r\n"
                        "BAT:V=%.2f I=%.2f\r\n",
                        ax, ay, az, gx, gy, gz,
                        imu_ok ? "" : " [ERR]",
-                       mx, my, mz,
+                       heading,
                        mag_ok ? "" : " [ERR]",
-                       pressure, alt,
-                       baro_ok ? "" : " [ERR]",
+                       gps_alt,
                        v, i);
     HAL_UART_Transmit(dbgUart, (uint8_t *)buf, len, HAL_MAX_DELAY);
 }

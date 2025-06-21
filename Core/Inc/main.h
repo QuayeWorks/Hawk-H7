@@ -131,10 +131,6 @@ void Error_Handler(void);
 #define YAW_Buck_EN_GPIO_Port GPIOI
 #define MPU6050_EN_Pin GPIO_PIN_15
 #define MPU6050_EN_GPIO_Port GPIOA
-#define BMP388_EN_Pin GPIO_PIN_0
-#define BMP388_EN_GPIO_Port GPIOD
-#define QMC5883_EN_Pin GPIO_PIN_1
-#define QMC5883_EN_GPIO_Port GPIOD
 #define ARM_Buck_EN_Pin GPIO_PIN_13
 #define ARM_Buck_EN_GPIO_Port GPIOG
 #define PITCH_Buck_EN_Pin GPIO_PIN_14

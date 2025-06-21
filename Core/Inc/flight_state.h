@@ -24,17 +24,15 @@
 // Health bits (bits 0–7).  These must all be set before we become “Ready”:
 #define FS_HEALTH_IMU_OK_BIT          (1u << 0)   // 0: IMU biases within tolerances
 #define FS_HEALTH_COMPASS_OK_BIT      (1u << 1)   // 1: Magnetometer passes Mahalanobis test
-#define FS_HEALTH_BARO_OK_BIT         (1u << 2)   // 2: Baro pressure within ±10hPa
-#define FS_HEALTH_SONAR_OK_BIT        (1u << 3)   // 3: Sonar reading is plausible (if used)
-#define FS_HEALTH_GPS_OK_BIT          (1u << 4)   // 4: GPS fix ≥ min satellites, HDOP ≤ threshold
-#define FS_HEALTH_RC_OK_BIT           (1u << 5)   // 5: RSSI ok, no stale/jittery channels, throttle low
-#define FS_HEALTH_BATT_OK_BIT         (1u << 6)   // 6: Per‐cell voltage > min and under‐load‐measured OK
-#define FS_HEALTH_EKF_OK_BIT          (1u << 7)   // 7: EKF innovations all within gates / covariance OK
+#define FS_HEALTH_SONAR_OK_BIT        (1u << 2)   // 2: Sonar reading is plausible (if used)
+#define FS_HEALTH_GPS_OK_BIT          (1u << 3)   // 3: GPS fix ≥ min satellites, HDOP ≤ threshold
+#define FS_HEALTH_RC_OK_BIT           (1u << 4)   // 4: RSSI ok, no stale/jittery channels, throttle low
+#define FS_HEALTH_BATT_OK_BIT         (1u << 5)   // 5: Per‐cell voltage > min and under‐load‐measured OK
+#define FS_HEALTH_EKF_OK_BIT          (1u << 6)   // 6: EKF innovations all within gates / covariance OK
 
 // Composite masks for convenience:
 #define FS_ALL_HEALTH_BITS  (FS_HEALTH_IMU_OK_BIT   \
                            |FS_HEALTH_COMPASS_OK_BIT \
-                           |FS_HEALTH_BARO_OK_BIT    \
                            |FS_HEALTH_SONAR_OK_BIT   \
                            |FS_HEALTH_GPS_OK_BIT     \
                            |FS_HEALTH_RC_OK_BIT      \
