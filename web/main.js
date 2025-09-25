@@ -53,82 +53,8 @@ function createScene() {
   treeTemplate.setEnabled(false);
 
   scatterForest(scene, treeTemplate, shadowGenerator);
-  scene.onAnimationGroupAddedObservable.add((animationGroup) => {
-    if (animationGroup.name.toLowerCase().includes("punch")) {
-      correctPunchOrientation(animationGroup);
-    }
-  });
-  scene.animationGroups.forEach((animationGroup) => {
-    if (animationGroup.name.toLowerCase().includes("punch")) {
-      correctPunchOrientation(animationGroup);
-    }
-  });
   addPostProcess(scene, camera);
   return scene;
-}
-
-function correctPunchOrientation(animationGroup) {
-  const armKeywords = ["arm", "forearm", "hand"];
-
-  const flipQuaternion = (value) => {
-    let quaternion;
-    if (value instanceof BABYLON.Quaternion) {
-      quaternion = value.clone();
-    } else if (Array.isArray(value)) {
-      quaternion = BABYLON.Quaternion.FromArray(value);
-    } else if (
-      value &&
-      typeof value === "object" &&
-      "x" in value &&
-      "y" in value &&
-      "z" in value &&
-      "w" in value
-    ) {
-      quaternion = new BABYLON.Quaternion(value.x, value.y, value.z, value.w);
-    } else {
-      quaternion = BABYLON.Quaternion.Identity();
-    }
-
-    quaternion.x *= -1;
-    quaternion.z *= -1;
-    return quaternion;
-  };
-
-  const flipEuler = (value) => {
-    if (value instanceof BABYLON.Vector3) {
-      return new BABYLON.Vector3(value.x, -value.y, value.z);
-    }
-    if (Array.isArray(value)) {
-      return new BABYLON.Vector3(value[0], -value[1], value[2]);
-    }
-    if (value && typeof value === "object" && "x" in value && "y" in value && "z" in value) {
-      return new BABYLON.Vector3(value.x, -value.y, value.z);
-    }
-    return BABYLON.Vector3.Zero();
-  };
-
-  animationGroup.targetedAnimations.forEach(({ target, animation }) => {
-    if (!target || !target.name) {
-      return;
-    }
-    const targetName = target.name.toLowerCase();
-    const matchesArm = armKeywords.some((keyword) => targetName.includes(keyword));
-    if (!matchesArm) {
-      return;
-    }
-
-    const keys = animation.getKeys().map((key) => {
-      const cloned = { ...key };
-      if (animation.targetProperty === "rotationQuaternion") {
-        cloned.value = flipQuaternion(key.value);
-      } else if (animation.targetProperty === "rotation") {
-        cloned.value = flipEuler(key.value);
-      }
-      return cloned;
-    });
-
-    animation.setKeys(keys);
-  });
 }
 
 function createGroundMaterial(scene) {
