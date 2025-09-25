@@ -43,9 +43,7 @@ function createScene() {
     { width: 120, height: 120, subdivisions: 32 },
     scene
   );
-  const groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
-  groundMaterial.diffuseColor = new BABYLON.Color3(0.09, 0.24, 0.12);
-  groundMaterial.specularColor = BABYLON.Color3.Black();
+  const groundMaterial = createGroundMaterial(scene);
   const ground = scene.getMeshByName("ground");
   ground.material = groundMaterial;
   ground.receiveShadows = true;
@@ -131,6 +129,71 @@ function correctPunchOrientation(animationGroup) {
 
     animation.setKeys(keys);
   });
+}
+
+function createGroundMaterial(scene) {
+  const groundMaterial = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMaterial.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+  groundMaterial.specularPower = 32;
+
+  const textureSize = 1024;
+  const groundTexture = new BABYLON.DynamicTexture(
+    "groundTexture",
+    { width: textureSize, height: textureSize },
+    scene,
+    false
+  );
+  const context = groundTexture.getContext();
+  const { width, height } = groundTexture.getSize();
+
+  const gradient = context.createRadialGradient(
+    width / 2,
+    height / 2,
+    width * 0.15,
+    width / 2,
+    height / 2,
+    width * 0.7
+  );
+  gradient.addColorStop(0, "#3f8c44");
+  gradient.addColorStop(0.35, "#3b7c3c");
+  gradient.addColorStop(0.65, "#356236");
+  gradient.addColorStop(1, "#4b3a25");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  const imageData = context.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const noiseStrength = 18;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * noiseStrength;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise * 0.6));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise * 0.4));
+  }
+  context.putImageData(imageData, 0, 0);
+  groundTexture.update(false);
+  groundTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSING_MODE;
+  groundTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSING_MODE;
+  groundTexture.uScale = 2;
+  groundTexture.vScale = 2;
+
+  groundMaterial.diffuseTexture = groundTexture;
+  groundMaterial.diffuseColor = new BABYLON.Color3(0.35, 0.52, 0.32);
+  groundMaterial.ambientColor = new BABYLON.Color3(0.3, 0.38, 0.25);
+
+  const roughnessTexture = new BABYLON.NoiseProceduralTexture(
+    "groundNoise",
+    256,
+    scene
+  );
+  roughnessTexture.animationSpeedFactor = 0.15;
+  roughnessTexture.persistence = 2;
+  roughnessTexture.brightness = 0.3;
+  roughnessTexture.octaves = 3;
+  groundMaterial.bumpTexture = roughnessTexture;
+  groundMaterial.bumpTexture.level = 0.6;
+
+  return groundMaterial;
 }
 
 function buildProceduralTree(scene) {
