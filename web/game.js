@@ -1,3 +1,5 @@
+import { createRigEditor } from "./rig-editor.js";
+
 const DEFAULT_GROUND_SAMPLE_INTERVAL = 5;
 
 /**
@@ -227,6 +229,8 @@ class ExperienceController {
     this.currentMode = null;
     this.scene = null;
     this.menuBackground = null;
+    this._rigEditor = null;
+    this._rigEditorSceneObserver = null;
 
     this._renderLoop = this._renderLoop.bind(this);
     this.engine.runRenderLoop(this._renderLoop);
@@ -334,7 +338,12 @@ class ExperienceController {
     }
 
     const previousScene = this.scene;
+    const previousMode = this.currentMode;
     const preCounts = collectSceneCounts(previousScene);
+
+    if (previousMode === GameMode.RIG) {
+      this._teardownRigEditor();
+    }
 
     if (this.menuBackground) {
       this.menuBackground.dispose();
@@ -356,7 +365,7 @@ class ExperienceController {
 
     const finalizeRecord = () => {
       const postCounts = collectSceneCounts(scene);
-      this.auditPanel?.recordTransition(this.currentMode, mode, preCounts, postCounts);
+      this.auditPanel?.recordTransition(previousMode, mode, preCounts, postCounts);
     };
 
     if (scene.isReady()) {
@@ -367,9 +376,53 @@ class ExperienceController {
 
     this.currentMode = mode;
 
+    if (mode === GameMode.RIG) {
+      this._setupRigEditor(scene);
+    }
+
     scene.onDisposeObservable.add(() => {
       label.dispose();
     });
+  }
+
+  _setupRigEditor(scene) {
+    const host = document.getElementById("render-root");
+    if (!host) {
+      console.warn("Rig editor host missing; cannot initialize rig editor.");
+      return;
+    }
+
+    this._teardownRigEditor();
+
+    try {
+      this._rigEditor = createRigEditor(scene, { host });
+    } catch (error) {
+      console.error("Failed to initialize rig editor", error);
+      this._rigEditor = null;
+      return;
+    }
+
+    if (scene?.onDisposeObservable) {
+      this._rigEditorSceneObserver = scene.onDisposeObservable.add(() => {
+        this._teardownRigEditor();
+      });
+    }
+  }
+
+  _teardownRigEditor() {
+    if (this._rigEditorSceneObserver && this.scene?.onDisposeObservable) {
+      this.scene.onDisposeObservable.remove(this._rigEditorSceneObserver);
+      this._rigEditorSceneObserver = null;
+    }
+
+    if (this._rigEditor) {
+      try {
+        this._rigEditor.dispose();
+      } catch (error) {
+        console.warn("Error disposing rig editor", error);
+      }
+      this._rigEditor = null;
+    }
   }
 
   dispose() {
@@ -381,6 +434,8 @@ class ExperienceController {
     if (this.scene && !this.scene.isDisposed()) {
       this.scene.dispose();
     }
+
+    this._teardownRigEditor();
 
     this.engine.stopRenderLoop(this._renderLoop);
     this.engine.dispose();
