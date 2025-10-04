@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hawk-H7 QA Playground</title>
+    <style>
+      :root {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color-scheme: dark;
+        background: #10131a;
+        color: #eef2ff;
+      }
+
+      body,
+      html {
+        margin: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #app {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(240px, 300px) 1fr;
+        grid-template-rows: 1fr;
+        gap: 0;
+        overflow: hidden;
+      }
+
+      #hud-root {
+        background: linear-gradient(160deg, rgba(36, 44, 64, 0.8), rgba(12, 16, 28, 0.9));
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        gap: 16px;
+        box-sizing: border-box;
+        backdrop-filter: blur(12px);
+      }
+
+      #render-root {
+        position: relative;
+        background: radial-gradient(circle at top, #0d1b2a, #000611);
+      }
+
+      #renderCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .mode-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+      }
+
+      .mode-button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(14, 21, 35, 0.85);
+        color: inherit;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        transition: background 120ms ease, transform 120ms ease,
+          border-color 120ms ease;
+      }
+
+      .mode-button:hover,
+      .mode-button:focus {
+        background: rgba(46, 88, 255, 0.2);
+        border-color: rgba(100, 160, 255, 0.45);
+        outline: none;
+      }
+
+      .mode-button[aria-pressed="true"] {
+        background: rgba(70, 120, 255, 0.3);
+        border-color: rgba(125, 180, 255, 0.75);
+      }
+
+      .panel {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(9, 13, 24, 0.7);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 1rem;
+      }
+
+      .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+
+      .audit-table thead {
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        color: rgba(223, 231, 255, 0.65);
+      }
+
+      .audit-table th,
+      .audit-table td {
+        text-align: left;
+        padding: 6px 4px;
+      }
+
+      .audit-table tbody tr:nth-child(odd) {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .audit-table tbody tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .audit-table tbody td.mode {
+        font-weight: 600;
+        color: rgba(189, 208, 255, 0.9);
+      }
+
+      .menu-decor {
+        position: absolute;
+        inset: 16px;
+        border-radius: 24px;
+        pointer-events: none;
+        border: 2px dashed rgba(118, 160, 255, 0.35);
+        opacity: 0.7;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-end;
+        padding: 12px 16px;
+        font-size: 0.9rem;
+        color: rgba(173, 202, 255, 0.8);
+      }
+    </style>
+    <script src="https://cdn.babylonjs.com/babylon.js" defer></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js" defer></script>
+    <script type="module" defer>
+      import { initializeExperience, GameMode } from "./game.js";
+      import { createHUD } from "./hud.js";
+
+      window.addEventListener("DOMContentLoaded", () => {
+        const canvas = document.getElementById("renderCanvas");
+        const auditHost = document.getElementById("audit-panel");
+        const auditPanel = createHUD(auditHost);
+        const experience = initializeExperience(canvas, auditPanel);
+
+        const buttons = document.querySelectorAll("[data-mode]");
+        function updatePressed(targetMode) {
+          buttons.forEach((button) => {
+            button.setAttribute(
+              "aria-pressed",
+              button.dataset.mode === targetMode ? "true" : "false"
+            );
+          });
+        }
+
+        buttons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const mode = button.dataset.mode;
+            experience.setMode(mode);
+            updatePressed(mode);
+          });
+        });
+
+        updatePressed(GameMode.MENU);
+      });
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="hud-root">
+        <section class="panel">
+          <h2>Modes</h2>
+          <div class="mode-buttons">
+            <button class="mode-button" data-mode="menu" aria-pressed="true">
+              Menu
+            </button>
+            <button class="mode-button" data-mode="game" aria-pressed="false">
+              Game
+            </button>
+            <button class="mode-button" data-mode="creator" aria-pressed="false">
+              Creator
+            </button>
+            <button class="mode-button" data-mode="rig" aria-pressed="false">
+              Rig Editor
+            </button>
+          </div>
+        </section>
+        <section id="audit-panel" class="panel"></section>
+      </aside>
+      <main id="render-root">
+        <canvas id="renderCanvas"></canvas>
+      </main>
+    </div>
+  </body>
+</html>
