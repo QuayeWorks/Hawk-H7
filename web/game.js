@@ -32,7 +32,8 @@ export function updateRootGroundOffset(
   playerRoot.computeWorldMatrix(true);
   const sampleOffset = sampleRootGroundOffset(playerRoot);
   if (Number.isFinite(sampleOffset)) {
-    state.rootGroundOffsetTarget += sampleOffset;
+    const currentOffset = state.rootGroundOffset ?? 0;
+    state.rootGroundOffsetTarget = currentOffset + sampleOffset;
   }
 
   state.groundSampleDirty = false;
