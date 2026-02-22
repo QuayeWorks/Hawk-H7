@@ -22,6 +22,11 @@ static uint32_t riseTime[SONAR_COUNT];
 static uint32_t trigTick[SONAR_COUNT];
 static bool     gotEcho[SONAR_COUNT];
 static float    lastDistance[SONAR_COUNT];
+static uint32_t echoTimeoutCount;
+static uint32_t extiEdgeCount[SONAR_COUNT];
+static uint32_t lastEdgeMs[SONAR_COUNT];
+static uint32_t lastTriggerMs;
+static uint32_t triggerCount;
 
 void Sonar_Init(void) {
     // Configure trigger pins as output (CubeMX should set them up)
@@ -29,10 +34,15 @@ void Sonar_Init(void) {
         HAL_GPIO_WritePin(trigPins[i].port, trigPins[i].pin, GPIO_PIN_RESET);
     }
     uint32_t now = HAL_GetTick();
+    echoTimeoutCount = 0u;
+    lastTriggerMs = now;
+    triggerCount = 0u;
     for (int i = 0; i < SONAR_COUNT; i++) {
         trigTick[i]    = now;
         gotEcho[i]     = false;
         lastDistance[i] = -1.0f; // no reading yet
+        extiEdgeCount[i] = 0u;
+        lastEdgeMs[i] = 0u;
     }
 }
 
@@ -43,6 +53,7 @@ void Sonar_TriggerAll(void) {
         // mark reading invalid
         if (!gotEcho[i] && (now - trigTick[i]) >= SONAR_TIMEOUT_MS) {
             lastDistance[i] = -1.0f;
+            echoTimeoutCount++;
         }
         // Prepare for this cycle
         gotEcho[i]  = false;
@@ -58,6 +69,8 @@ void Sonar_TriggerAll(void) {
     for (int i = 0; i < SONAR_COUNT; i++) {
         HAL_GPIO_WritePin(trigPins[i].port, trigPins[i].pin, GPIO_PIN_RESET);
     }
+    lastTriggerMs = now;
+    triggerCount++;
 }
 
 void Sonar_EchoCallback(uint8_t index, GPIO_PinState state) {
@@ -80,6 +93,8 @@ void Sonar_EchoCallback(uint8_t index, GPIO_PinState state) {
         gotEcho[index]     = true;
         lastDistance[index] = dist;
     }
+    extiEdgeCount[index]++;
+    lastEdgeMs[index] = HAL_GetTick();
 }
 
 float Sonar_ReadDistance(uint8_t index) {
@@ -93,4 +108,35 @@ float Sonar_ReadDistance(uint8_t index) {
         return d;
     }
     return 0.0f;
+}
+
+uint32_t Sonar_GetEchoTimeoutCount(void)
+{
+    return echoTimeoutCount;
+}
+
+uint32_t Sonar_GetEdgeCount(uint8_t index)
+{
+    if (index < SONAR_COUNT) {
+        return extiEdgeCount[index];
+    }
+    return 0u;
+}
+
+uint32_t Sonar_GetLastEdgeMs(uint8_t index)
+{
+    if (index < SONAR_COUNT) {
+        return lastEdgeMs[index];
+    }
+    return 0u;
+}
+
+uint32_t Sonar_GetLastTriggerMs(void)
+{
+    return lastTriggerMs;
+}
+
+uint32_t Sonar_GetTriggerCount(void)
+{
+    return triggerCount;
 }

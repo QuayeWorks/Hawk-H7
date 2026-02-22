@@ -41,5 +41,10 @@ void Sonar_TriggerAll(void);
 
 // Read the last computed distance (meters) for sonar index [0..SONAR_COUNT-1]
 float Sonar_ReadDistance(uint8_t index);
+uint32_t Sonar_GetEchoTimeoutCount(void);
+uint32_t Sonar_GetEdgeCount(uint8_t index);
+uint32_t Sonar_GetLastEdgeMs(uint8_t index);
+uint32_t Sonar_GetLastTriggerMs(void);
+uint32_t Sonar_GetTriggerCount(void);
 
 #endif // SONAR_H

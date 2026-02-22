@@ -38,5 +38,10 @@ float  GPS_GetHDOP(void);
 double GPS_GetLatitude(void);
 double GPS_GetLongitude(void);
 float  GPS_GetAltitude(void);
+uint32_t GPS_GetUpdateCount(void);
+uint32_t GPS_GetLastUpdateMs(void);
+uint16_t GPS_GetSentenceRateHz(void);
+uint32_t GPS_GetDroppedByteCount(void);
+uint16_t GPS_GetRxRingLevel(void);
 
 #endif // GPS_H

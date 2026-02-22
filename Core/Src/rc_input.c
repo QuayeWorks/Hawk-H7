@@ -18,6 +18,8 @@ static uint32_t riseTime;            // timestamp of last processed rising edge 
 static uint16_t channelWidths[RC_MAX_CHANNELS];
 static uint32_t channelTimestamps[RC_MAX_CHANNELS]; // in ms for stale check
 static uint16_t rssiValue;
+static uint32_t frameCount;
+static uint32_t lastFrameMs;
 
 // Helper to get microseconds since boot (uses DWT cycle counter)
 static inline uint32_t micros(void) {
@@ -32,6 +34,8 @@ void RC_Input_Init(void) {
     ppmChannel  = 0;
     riseTime    = 0;
     rssiValue   = 0;
+    frameCount  = 0;
+    lastFrameMs = 0;
     // If your receiver has RSSI on an ADC channel, start ADC here
     // HAL_ADC_Start_DMA(&hadc1, &rssiValue, 1);
 }
@@ -46,6 +50,10 @@ void RC_Input_EXTI_Callback(void) {
         riseTime = now;
 
         if (width > RC_SYNC_PULSE_US) {
+            if (ppmChannel > 0) {
+                frameCount++;
+                lastFrameMs = HAL_GetTick();
+            }
             // Sync pause → reset channel index
             ppmChannel = 0;
         } else if (ppmChannel < RC_MAX_CHANNELS) {
@@ -106,4 +114,14 @@ bool RC_LinkLostForSeconds(uint16_t seconds)
         }
     }
     return true;
+}
+
+uint32_t RC_GetFrameCount(void)
+{
+    return frameCount;
+}
+
+uint32_t RC_GetLastFrameMs(void)
+{
+    return lastFrameMs;
 }

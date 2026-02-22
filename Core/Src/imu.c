@@ -9,24 +9,57 @@
 #include "flight_state.h"
 #include "settings.h"
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
+
+#define IMU_I2C_TIMEOUT_MS 5u
 
 static I2C_HandleTypeDef *hi2c;
 static float accelBiasX, accelBiasY, accelBiasZ;
 static float gyroBiasX, gyroBiasY, gyroBiasZ;
 static int16_t lastRawAx, lastRawAy, lastRawAz;
 static int16_t lastRawGx, lastRawGy, lastRawGz;
+static uint8_t imuWhoAmI;
+static bool imuIdentityOk;
+static uint32_t imuReadOkCount;
+static uint32_t imuReadFailCount;
+static uint32_t imuLastReadMs;
+static HAL_StatusTypeDef imuLastHalStatus = HAL_OK;
 
 void IMU_Init(I2C_HandleTypeDef *i2c_handle) {
+    uint8_t pwr;
+    uint8_t cfg;
+
     hi2c = i2c_handle;
+    imuWhoAmI = 0u;
+    imuIdentityOk = false;
+    imuReadOkCount = 0u;
+    imuReadFailCount = 0u;
+    imuLastReadMs = 0u;
+    imuLastHalStatus = HAL_OK;
+
+    if (hi2c == NULL) {
+        return;
+    }
+
+    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_WHO_AM_I, 1,
+                                        &imuWhoAmI, 1, 20);
+    if (imuLastHalStatus != HAL_OK) {
+        return;
+    }
+    if (imuWhoAmI != 0x68u && imuWhoAmI != 0x69u) {
+        return;
+    }
+    imuIdentityOk = true;
+
     // Wake up the MPU6050 (exit sleep)
-    uint8_t pwr = 0x00;
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 1, &pwr, 1, HAL_MAX_DELAY);
+    pwr = 0x00;
+    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 1, &pwr, 1, IMU_I2C_TIMEOUT_MS);
     // Configure accel ±4g, gyro ±500°/s (for example)
-    uint8_t cfg = (0x01 << 3); // accel FS_SEL=1 (±4g)
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG, 1, &cfg, 1, HAL_MAX_DELAY);
+    cfg = (0x01 << 3); // accel FS_SEL=1 (±4g)
+    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
     cfg = (0x01 << 3); // gyro FS_SEL=1 (±500 °/s)
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_GYRO_CONFIG, 1, &cfg, 1, HAL_MAX_DELAY);
+    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_GYRO_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
 
     // Load any pre‐saved biases from settings.ini
     IMU_CalibrateOnBoot( (Settings_GetCalibrateOnBoot()? Settings_GetCalibSamples() : 0),
@@ -37,6 +70,10 @@ void IMU_Init(I2C_HandleTypeDef *i2c_handle) {
 bool IMU_CalibrateOnBoot(uint16_t samples, float tolG,
                          float *bax, float *bay, float *baz)
 {
+    if (bax == NULL || bay == NULL || baz == NULL || !imuIdentityOk) {
+        return false;
+    }
+
     // If user disabled recalibration, just load the saved values
     if (samples == 0) {
     	// No recalibration: load previous biases from settings
@@ -51,7 +88,9 @@ bool IMU_CalibrateOnBoot(uint16_t samples, float tolG,
     int64_t sumAx=0, sumAy=0, sumAz=0;
     for (uint16_t i=0; i<samples; i++) {
         int16_t ax,ay,az,gx,gy,gz;
-        IMU_ReadRaw(&ax,&ay,&az,&gx,&gy,&gz);
+        if (!IMU_ReadRaw(&ax,&ay,&az,&gx,&gy,&gz)) {
+            return false;
+        }
         sumAx += ax; sumAy += ay; sumAz += az;
         HAL_Delay(5);
     }
@@ -74,7 +113,14 @@ bool IMU_ReadRaw(int16_t *ax, int16_t *ay, int16_t *az,
                  int16_t *gx, int16_t *gy, int16_t *gz)
 {
     uint8_t buf[14];
-    if (HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_XOUT_H, 1, buf, 14, HAL_MAX_DELAY) != HAL_OK) {
+    if (!imuIdentityOk || hi2c == NULL ||
+        ax == NULL || ay == NULL || az == NULL ||
+        gx == NULL || gy == NULL || gz == NULL) {
+        return false;
+    }
+    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_XOUT_H, 1, buf, 14, IMU_I2C_TIMEOUT_MS);
+    if (imuLastHalStatus != HAL_OK) {
+        imuReadFailCount++;
         return false;
     }
     *ax = (buf[0] << 8) | buf[1];
@@ -85,6 +131,8 @@ bool IMU_ReadRaw(int16_t *ax, int16_t *ay, int16_t *az,
     *gz = (buf[12]<< 8) | buf[13];
     lastRawAx = *ax; lastRawAy = *ay; lastRawAz = *az;
     lastRawGx = *gx; lastRawGy = *gy; lastRawGz = *gz;
+    imuReadOkCount++;
+    imuLastReadMs = HAL_GetTick();
     return true;
 }
 
@@ -105,6 +153,9 @@ void IMU_GetGyroDPS(float *x, float *y, float *z) {
 }
 
 bool IMU_CheckPlausibility(void) {
+    if (!imuIdentityOk) {
+        return false;
+    }
     // Reject if any raw value is at extreme ±32767 (clipping)
     if (abs(lastRawAx) == 32767 || abs(lastRawAy) == 32767 || abs(lastRawAz) == 32767) return false;
     if (abs(lastRawGx) == 32767 || abs(lastRawGy) == 32767 || abs(lastRawGz) == 32767) return false;
@@ -113,4 +164,34 @@ bool IMU_CheckPlausibility(void) {
                     + powf(lastRawAy/8192.0f + accelBiasY,2)
                     + powf(lastRawAz/8192.0f + accelBiasZ,2));
     return (mag > 0.2f && mag < 4.0f);
+}
+
+bool IMU_IsIdentityOK(void)
+{
+    return imuIdentityOk;
+}
+
+uint8_t IMU_GetWhoAmI(void)
+{
+    return imuWhoAmI;
+}
+
+uint32_t IMU_GetReadOkCount(void)
+{
+    return imuReadOkCount;
+}
+
+uint32_t IMU_GetReadFailCount(void)
+{
+    return imuReadFailCount;
+}
+
+uint32_t IMU_GetLastReadMs(void)
+{
+    return imuLastReadMs;
+}
+
+HAL_StatusTypeDef IMU_GetLastHalStatus(void)
+{
+    return imuLastHalStatus;
 }

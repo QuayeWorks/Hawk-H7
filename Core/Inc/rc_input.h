@@ -48,6 +48,10 @@ uint16_t RC_GetRSSI(void);
 // Returns true if all channels have been updated within the last 200µs of jitter threshold
 bool RC_AllChannelsStable(void);
 
+// Diagnostic counters for scheduler/health reporting.
+uint32_t RC_GetFrameCount(void);
+uint32_t RC_GetLastFrameMs(void);
+
 /// @brief  Returns true if the RC PPM channels have been lost for at least `seconds` seconds.
 /// @param  seconds  How many seconds of lost signal to consider as link‐loss.
 /// @return true if the link is lost, false otherwise.

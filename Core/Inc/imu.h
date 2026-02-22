@@ -30,6 +30,7 @@
 #define MPU6050_GYRO_XOUT_H     0x43
 #define MPU6050_GYRO_YOUT_H     0x45
 #define MPU6050_GYRO_ZOUT_H     0x47
+#define MPU6050_WHO_AM_I        0x75
 
 /*
  * MPU6050 6-axis IMU driver.
@@ -63,5 +64,11 @@ void     IMU_GetGyroDPS(float *x, float *y, float *z);
 // (±32767), and accelerometer magnitude is within [0.1g … 4g], for example.
 // Returns true if OK, false if clipping/stuck.
 bool     IMU_CheckPlausibility(void);
+bool     IMU_IsIdentityOK(void);
+uint8_t  IMU_GetWhoAmI(void);
+uint32_t IMU_GetReadOkCount(void);
+uint32_t IMU_GetReadFailCount(void);
+uint32_t IMU_GetLastReadMs(void);
+HAL_StatusTypeDef IMU_GetLastHalStatus(void);
 
 #endif // IMU_H

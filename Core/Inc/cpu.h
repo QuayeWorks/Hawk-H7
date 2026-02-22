@@ -9,6 +9,7 @@
 #define CPU_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * @brief  Verifies that critical loops are meeting timing constraints
@@ -19,5 +20,9 @@ bool CPU_CheckTimingConstraints(void);
 
 /// Enable the CPU cycle counter for precise timing.
 void CPU_EnableCycleCounter(void);
+uint16_t CPU_GetLoopRateHz(void);
+uint32_t CPU_GetLastLoopDtMs(void);
+uint32_t CPU_GetMaxLoopDtMs(void);
+uint32_t CPU_GetMissedDeadlineCount(void);
 
 #endif // CPU_H

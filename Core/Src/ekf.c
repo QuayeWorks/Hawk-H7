@@ -7,21 +7,39 @@
 
 #include "ekf.h"
 #include "settings.h"
+#include "stm32h7xx_hal.h"
 #include <math.h>
 #include <string.h>
 
 // Innovation values (Mahalanobis distances) for each sensor
 static float innovGPS;
 static float innovMag;
-// You may add innovFlow or others if you have an optical‐flow sensor
+static float innovBaro;
 
 // Internal timer (ms) since EKF_Init
 static uint32_t ekfTimeMs;
+static uint32_t ekfLastUpdateMs;
+
+static float ekfAltM;
+static float ekfVelZMps;
+static float pendingGpsAltM;
+static float pendingBaroAltM;
+static bool hasGpsUpdate;
+static bool hasBaroUpdate;
 
 /// Initialize internal state
 void EKF_Init(void) {
     ekfTimeMs = 0;
-    innovGPS  = innovMag = 0.0f;
+    ekfLastUpdateMs = HAL_GetTick();
+    innovGPS  = 0.0f;
+    innovMag  = 0.0f;
+    innovBaro = 0.0f;
+    ekfAltM = 0.0f;
+    ekfVelZMps = 0.0f;
+    pendingGpsAltM = 0.0f;
+    pendingBaroAltM = 0.0f;
+    hasGpsUpdate = false;
+    hasBaroUpdate = false;
     // If you have state / covariance matrices, initialize them here
 }
 
@@ -54,30 +72,85 @@ void EKF_PublishGPS(double lat, double lon, float alt)
     // Example: update EKF position using GPS
     //   update_state_from_gps(lat, lon, alt);
 
-    float threshold = Settings_GetEKFInnovationGPS();
-    float residual = 0.0f;  // replace with computed position residual
-    innovGPS = (threshold > 0) ? (fabsf(residual)/threshold) : 0.0f;
+    (void)lat;
+    (void)lon;
+    pendingGpsAltM = alt;
+    hasGpsUpdate = true;
+}
+
+void EKF_PublishBaro(float alt_m)
+{
+    pendingBaroAltM = alt_m;
+    hasBaroUpdate = true;
 }
 
 /// Run one EKF cycle: propagate and incorporate all queued measurements,
 /// then advance the internal clock for covariance convergence checking.
 void EKF_UpdateSensors(void)
 {
+    uint32_t now = HAL_GetTick();
+    float dt_s = (float)(now - ekfLastUpdateMs) * 0.001f;
+    float gpsThreshold;
+    float baroThreshold;
+    float residual;
+
+    if (dt_s <= 0.0f) {
+        dt_s = 0.001f;
+    } else if (dt_s > 0.1f) {
+        dt_s = 0.1f;
+    }
+
+    ekfLastUpdateMs = now;
+    ekfTimeMs += (uint32_t)(dt_s * 1000.0f);
+
     // 1) Propagate state by IMU (if using inertial nav)
-    // 2) Incorporate magnetometer and GPS measurements
-    // 3) Compute actual Mahalanobis distances and store in innovGPS/innovMag
+    ekfAltM += ekfVelZMps * dt_s;
 
-    // --- Stubs above already set innov* values in PublishXxx() ---
+    // 2) Incorporate barometer measurement (primary vertical reference).
+    if (hasBaroUpdate) {
+        baroThreshold = Settings_GetEKFInnovationBaro();
+        if (baroThreshold <= 0.0f) {
+            baroThreshold = 1.0f;
+        }
 
-    // 4) Advance time
-    ekfTimeMs += Settings_GetEKFMinObsTimeSec() * 1000; // or simply HAL_GetTick() in real code
+        residual = pendingBaroAltM - ekfAltM;
+        innovBaro = fabsf(residual) / baroThreshold;
+        if (innovBaro <= 1.0f) {
+            ekfAltM += 0.35f * residual;
+            ekfVelZMps += 0.08f * (residual / dt_s);
+        }
+        hasBaroUpdate = false;
+    }
+
+    // 3) Incorporate GPS altitude with lower gain.
+    if (hasGpsUpdate) {
+        gpsThreshold = Settings_GetEKFInnovationGPS();
+        if (gpsThreshold <= 0.0f) {
+            gpsThreshold = 1.0f;
+        }
+
+        residual = pendingGpsAltM - ekfAltM;
+        innovGPS = fabsf(residual) / gpsThreshold;
+        if (innovGPS <= 1.0f) {
+            ekfAltM += 0.10f * residual;
+            ekfVelZMps += 0.02f * (residual / dt_s);
+        }
+        hasGpsUpdate = false;
+    }
+
+    if (ekfVelZMps > 25.0f) {
+        ekfVelZMps = 25.0f;
+    } else if (ekfVelZMps < -25.0f) {
+        ekfVelZMps = -25.0f;
+    }
 }
 
 /// Returns true if all innovation gates (GPS, Mag, Baro) PASS:
 bool EKF_AllInnovationGatesOK(void)
 {
     return (innovGPS  <= 1.0f)
-        && (innovMag  <= 1.0f);
+        && (innovMag  <= 1.0f)
+        && (innovBaro <= 1.0f);
 }
 
 /// Returns true after the filter has had time to converge:

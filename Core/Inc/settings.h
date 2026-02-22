@@ -35,6 +35,13 @@
 //-----------------------------------------------------------------------------
 bool Settings_Init(const char *ini_path);
 bool Settings_Save(void);
+void Settings_RequestSave(void);
+void Settings_ProcessDeferredSave(uint32_t now_ms, bool allow_write);
+const char* Settings_GetIniPath(void);
+bool Settings_IsSavePending(void);
+uint32_t Settings_GetLastSaveAttemptMs(void);
+bool Settings_GetLastSaveAttemptFailed(void);
+uint32_t Settings_GetLastSaveSuccessMs(void);
 
 //-----------------------------------------------------------------------------
 // [IMU] → Accelerometer & Gyro Calibration
@@ -79,6 +86,21 @@ void    Settings_SetMagMahaThreshold(float v);
 
 bool    Settings_GetCompassAutoSave(void);
 void    Settings_SetCompassAutoSave(bool on);
+
+//-----------------------------------------------------------------------------
+// [BARO] → Barometer Configuration
+//-----------------------------------------------------------------------------
+bool    Settings_GetBaroEnabled(void);
+void    Settings_SetBaroEnabled(bool on);
+
+float   Settings_GetBaroPressureOffsetHpa(void);
+void    Settings_SetBaroPressureOffsetHpa(float v);
+
+float   Settings_GetBaroToleranceHpa(void);
+void    Settings_SetBaroToleranceHpa(float v);
+
+float   Settings_GetBaroAltOffsetM(void);
+void    Settings_SetBaroAltOffsetM(float v);
 
 //-----------------------------------------------------------------------------
 // [SONAR] → Rangefinder/Sonar Settings
@@ -217,6 +239,9 @@ void     Settings_SetEKFInnovationGPS(float v);
 
 float    Settings_GetEKFInnovationMag(void);
 void     Settings_SetEKFInnovationMag(float v);
+
+float    Settings_GetEKFInnovationBaro(void);
+void     Settings_SetEKFInnovationBaro(float v);
 
 float    Settings_GetEKFGyroNoiseSigma(void);
 void     Settings_SetEKFGyroNoiseSigma(float v);

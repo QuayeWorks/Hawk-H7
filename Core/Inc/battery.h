@@ -51,5 +51,13 @@ float      Battery_GetRemaining_mAh(void);
 
 /// Get remaining capacity as a percentage (0–100%).
 float      Battery_GetRemainingPercent(void);
+uint32_t   Battery_GetI2CErrorCount(void);
+uint32_t   Battery_GetADCTimeoutCount(void);
+uint32_t   Battery_GetCurrentSampleCount(void);
+uint32_t   Battery_GetVoltageSampleCount(void);
+uint32_t   Battery_GetLastCurrentMs(void);
+uint32_t   Battery_GetLastVoltageMs(void);
+HAL_StatusTypeDef Battery_GetLastI2CStatus(void);
+HAL_StatusTypeDef Battery_GetLastADCStatus(void);
 
 #endif // BATTERY_H

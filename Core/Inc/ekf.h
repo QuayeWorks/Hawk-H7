@@ -19,6 +19,7 @@
  *       EKF_PublishIMU(ax,ay,az,gx,gy,gz);
  *       EKF_PublishMag(heading);
  *       EKF_PublishGPS(lat,lon,alt);
+ *       EKF_PublishBaro(alt_m);
  *   • Then call EKF_UpdateSensors() once (e.g. at 200 Hz).
  *   • Query:
  *       EKF_AllInnovationGatesOK() → true if no gate was tripped
@@ -38,6 +39,9 @@ void EKF_PublishMag(float heading_deg);
 
 /// Feed GPS position & altitude (degrees, degrees, m) into the filter.
 void EKF_PublishGPS(double lat, double lon, float alt);
+
+/// Feed barometric altitude (m, relative frame) into the filter.
+void EKF_PublishBaro(float alt_m);
 
 /// Run one full EKF update step. Call this after publishing all sensors.
 void EKF_UpdateSensors(void);

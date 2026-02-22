@@ -20,5 +20,6 @@ bool  Compass_ReadRaw(int16_t *mx, int16_t *my, int16_t *mz);
 float Compass_ComputeHeading(int16_t mx, int16_t my, int16_t mz);
 
 bool  Compass_CheckMahalanobis(int16_t mx, int16_t my, int16_t mz, float threshold);
+bool  Compass_IsStub(void);
 
 #endif // COMPASS_H

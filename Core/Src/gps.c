@@ -17,9 +17,16 @@
 #include <math.h>  // for sin, cos, sqrt
 
 #define GPS_RX_BUFFER_SIZE 128
+#define GPS_RX_RING_SIZE   512
 
 static double homeLat, homeLon;
 static uint32_t firstFixMs = 0;
+static uint32_t gpsUpdateCount = 0;
+static uint32_t gpsLastUpdateMs = 0;
+static uint32_t gpsSentenceCount = 0;
+static uint16_t gpsSentenceRateHz = 0;
+static uint16_t gpsSentenceWindowCount = 0;
+static uint32_t gpsSentenceWindowStartMs = 0;
 
 // Simple structure to hold the latest GPS data
 static struct {
@@ -34,6 +41,10 @@ static struct {
 // UART handle & RX byte
 static UART_HandleTypeDef *gpsUart;
 static uint8_t rxByte;
+static volatile uint8_t rxRing[GPS_RX_RING_SIZE];
+static volatile uint16_t rxHead;
+static volatile uint16_t rxTail;
+static volatile uint32_t rxDroppedBytes;
 
 // Line buffer for NMEA sentences
 static char lineBuf[GPS_RX_BUFFER_SIZE];
@@ -52,16 +63,21 @@ static double NmeaToDeg(const char *nmea, char dir) {
 
 // Called by HAL_UART_RxCpltCallback when a byte arrives
 void GPS_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart != gpsUart) return;
-    char c = (char)rxByte;
-    if (c == '\n' || lineIdx >= GPS_RX_BUFFER_SIZE-1) {
-        // End of line or buffer full
-        lineBuf[lineIdx] = '\0';
-        GPS_ProcessSentence(lineBuf);
-        lineIdx = 0;
-    } else if (c != '\r') {
-        lineBuf[lineIdx++] = c;
+    uint16_t nextHead;
+
+    if (huart != gpsUart) {
+        return;
     }
+
+    // IRQ path: only enqueue the received byte and re-arm reception.
+    nextHead = (uint16_t)((rxHead + 1u) % GPS_RX_RING_SIZE);
+    if (nextHead != rxTail) {
+        rxRing[rxHead] = rxByte;
+        rxHead = nextHead;
+    } else {
+        rxDroppedBytes++;
+    }
+
     // Re-arm UART receive interrupt
     HAL_UART_Receive_IT(gpsUart, &rxByte, 1);
 }
@@ -83,6 +99,17 @@ void GPS_Init(UART_HandleTypeDef *huart) {
     gpsData.latitude = 0.0;
     gpsData.longitude= 0.0;
     gpsData.altitude = 0.0f;
+    firstFixMs = 0;
+    gpsUpdateCount = 0;
+    gpsLastUpdateMs = 0;
+    gpsSentenceCount = 0;
+    gpsSentenceRateHz = 0;
+    gpsSentenceWindowCount = 0;
+    gpsSentenceWindowStartMs = HAL_GetTick();
+    rxHead = 0u;
+    rxTail = 0u;
+    rxDroppedBytes = 0u;
+    memset(lineBuf, 0, sizeof(lineBuf));
     // Start the first byte reception interrupt
     HAL_UART_Receive_IT(gpsUart, &rxByte, 1);
 }
@@ -90,10 +117,39 @@ void GPS_Init(UART_HandleTypeDef *huart) {
 // Called periodically (if you want to implement drift checks or timeouts).
 // For now, we do nothing here.
 void GPS_Update(void) {
-    // Example: you could track time since last valid fix and clear hasFix if too old
-    // static uint32_t lastFixMs;
-    // if (gpsData.hasFix) lastFixMs = HAL_GetTick();
-    // if ((HAL_GetTick() - lastFixMs) > 2000) gpsData.hasFix = false;
+    uint16_t headSnapshot = rxHead;
+    uint32_t nowMs;
+
+    while (rxTail != headSnapshot) {
+        char c = (char)rxRing[rxTail];
+        rxTail = (uint16_t)((rxTail + 1u) % GPS_RX_RING_SIZE);
+
+        if (c == '\n' || lineIdx >= (GPS_RX_BUFFER_SIZE - 1u)) {
+            lineBuf[lineIdx] = '\0';
+            GPS_ProcessSentence(lineBuf);
+            gpsSentenceCount++;
+            gpsSentenceWindowCount++;
+            lineIdx = 0u;
+        } else if (c != '\r') {
+            lineBuf[lineIdx++] = c;
+        }
+    }
+
+    nowMs = HAL_GetTick();
+    if (gpsSentenceWindowStartMs == 0u) {
+        gpsSentenceWindowStartMs = nowMs;
+    }
+    if ((nowMs - gpsSentenceWindowStartMs) >= 1000u) {
+        gpsSentenceRateHz = gpsSentenceWindowCount;
+        gpsSentenceWindowCount = 0u;
+        gpsSentenceWindowStartMs = nowMs;
+    }
+
+    if (gpsData.hasFix && gpsLastUpdateMs != 0U) {
+        if ((nowMs - gpsLastUpdateMs) > 2000U) {
+            gpsData.hasFix = false;
+        }
+    }
 }
 
 // Parse a single NMEA sentence (zero-terminated, no LF/CR). We only handle GGA here.
@@ -104,10 +160,14 @@ void GPS_ProcessSentence(const char *s) {
     }
     // Tokenize by commas
     // $--GGA,hhmmss.ss,lat,NS,lon,EW,quality,sat,hdop,alt,M,...
-    char *copy = strdup(s);
-    char *tok = strtok(copy, ",");
+    char copy[GPS_RX_BUFFER_SIZE];
+    char *tok;
     int idx = 0;
     char *fields[15];
+    strncpy(copy, s, sizeof(copy) - 1);
+    copy[sizeof(copy) - 1] = '\0';
+
+    tok = strtok(copy, ",");
     while (tok && idx < 15) {
         fields[idx++] = tok;
         tok = strtok(NULL, ",");
@@ -119,9 +179,15 @@ void GPS_ProcessSentence(const char *s) {
         float altf   = atof(fields[9]);
 
         // Only accept if quality >= 1 (GPS fix)
+        gpsLastUpdateMs = HAL_GetTick();
+        gpsUpdateCount++;
+
         if (quality >= 1 &&
             sats >= Settings_GetGPSMinSatellites() &&
-            hdopf <= Settings_GetGPSMaxHDOP()) {
+            hdopf <= Settings_GetGPSMaxHDOP() &&
+            fields[2] != NULL && fields[3] != NULL &&
+            fields[4] != NULL && fields[5] != NULL &&
+            fields[3][0] != '\0' && fields[5][0] != '\0') {
 
             double lat = NmeaToDeg(fields[2], fields[3][0]);
             double lon = NmeaToDeg(fields[4], fields[5][0]);
@@ -129,8 +195,8 @@ void GPS_ProcessSentence(const char *s) {
             gpsData.hasFix    = true;
             if (!firstFixMs) {
                 firstFixMs = HAL_GetTick();
-                homeLat = gpsData.latitude;
-                homeLon = gpsData.longitude;
+                homeLat = lat;
+                homeLon = lon;
             }
             gpsData.satCount  = sats;
             gpsData.hdop      = hdopf;
@@ -150,7 +216,6 @@ void GPS_ProcessSentence(const char *s) {
             gpsData.hasFix = false;
         }
     }
-    free(copy);
 }
 
 // Haversine formula to compute distance in meters between two lat/lon points
@@ -185,3 +250,16 @@ float   GPS_GetHDOP(void)    { return gpsData.hdop; }
 double  GPS_GetLatitude(void){ return gpsData.latitude; }
 double  GPS_GetLongitude(void){return gpsData.longitude; }
 float   GPS_GetAltitude(void){ return gpsData.altitude; }
+uint32_t GPS_GetUpdateCount(void) { return gpsUpdateCount; }
+uint32_t GPS_GetLastUpdateMs(void) { return gpsLastUpdateMs; }
+uint16_t GPS_GetSentenceRateHz(void) { return gpsSentenceRateHz; }
+uint32_t GPS_GetDroppedByteCount(void) { return (uint32_t)rxDroppedBytes; }
+uint16_t GPS_GetRxRingLevel(void)
+{
+    uint16_t head = rxHead;
+    uint16_t tail = rxTail;
+    if (head >= tail) {
+        return (uint16_t)(head - tail);
+    }
+    return (uint16_t)(GPS_RX_RING_SIZE - (tail - head));
+}

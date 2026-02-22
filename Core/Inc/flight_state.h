@@ -29,6 +29,7 @@
 #define FS_HEALTH_RC_OK_BIT           (1u << 4)   // 4: RSSI ok, no stale/jittery channels, throttle low
 #define FS_HEALTH_BATT_OK_BIT         (1u << 5)   // 5: Per‐cell voltage > min and under‐load‐measured OK
 #define FS_HEALTH_EKF_OK_BIT          (1u << 6)   // 6: EKF innovations all within gates / covariance OK
+#define FS_HEALTH_BARO_OK_BIT         (1u << 7)   // 7: Barometer healthy and pressure plausibility passes
 
 // Composite masks for convenience:
 #define FS_ALL_HEALTH_BITS  (FS_HEALTH_IMU_OK_BIT   \
@@ -37,7 +38,8 @@
                            |FS_HEALTH_GPS_OK_BIT     \
                            |FS_HEALTH_RC_OK_BIT      \
                            |FS_HEALTH_BATT_OK_BIT    \
-                           |FS_HEALTH_EKF_OK_BIT)
+                           |FS_HEALTH_EKF_OK_BIT     \
+                           |FS_HEALTH_BARO_OK_BIT)
 
 // “State” bits (≥ bit 8).  These are set only when all pre‐conditions are satisfied.
 #define FS_READY_BIT                 (1u << 8)   // 8: All health bits are OK → ready to arm

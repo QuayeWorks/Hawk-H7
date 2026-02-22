@@ -37,3 +37,8 @@ bool Compass_CheckMahalanobis(int16_t mx, int16_t my, int16_t mz, float threshol
     (void)mx; (void)my; (void)mz; (void)threshold;
     return true;
 }
+
+bool Compass_IsStub(void)
+{
+    return true;
+}

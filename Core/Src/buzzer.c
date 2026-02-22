@@ -71,7 +71,7 @@ static uint32_t      stepTimeLeft;  // in ms
 
 // Helper to start a PWM @ given frequency
 static void start_pwm(uint32_t freq_hz) {
-    if (buzzerCfg.htim) {
+    if (buzzerCfg.htim != NULL && buzzerCfg.htim->Instance != NULL) {
         // Assuming timer clock = 100 MHz. Adjust prescaler so that
         // ARR+1 = timer_clock / freq_hz.
         uint32_t timerCLK = HAL_RCC_GetPCLK1Freq();  // or PCLK2 depending on TIM
@@ -86,10 +86,12 @@ static void start_pwm(uint32_t freq_hz) {
 
 // Helper to stop PWM
 static void stop_pwm(void) {
-    if (buzzerCfg.htim) {
+    if (buzzerCfg.htim != NULL && buzzerCfg.htim->Instance != NULL) {
         HAL_TIM_PWM_Stop(buzzerCfg.htim, buzzerCfg.channel);
     }
-    HAL_GPIO_WritePin(buzzerCfg.port, buzzerCfg.pin, GPIO_PIN_RESET);
+    if (buzzerCfg.port != NULL) {
+        HAL_GPIO_WritePin(buzzerCfg.port, buzzerCfg.pin, GPIO_PIN_RESET);
+    }
 }
 
 // Initialize the buzzer driver

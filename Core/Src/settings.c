@@ -2,7 +2,10 @@
 #include "settings.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdio.h>      // for snprintf()
+#include "stm32h7xx.h"  // for __get_IPSR()
+#include "stm32h7xx_hal.h"
 
 //-----------------------------------------------------------------------------
 // Internal: Path to the INI file (as passed to Settings_Init). Example:
@@ -10,6 +13,12 @@
 // while parsing/writing, we always refer to this string:
 //-----------------------------------------------------------------------------
 static char ini_filepath[64] = {0};
+static volatile bool settings_save_requested = false;
+static uint32_t settings_last_attempt_ms = 0;
+static uint32_t settings_last_success_ms = 0;
+static bool settings_last_attempt_failed = false;
+#define SETTINGS_SAVE_RETRY_OK_MS    1000U
+#define SETTINGS_SAVE_RETRY_FAIL_MS 10000U
 
 //-----------------------------------------------------------------------------
 // Internal storage of all parameters (defaults match the “full settings.ini”)
@@ -34,6 +43,11 @@ static float  compass_hardIronZ    = 0.0f;
 static float  compass_mahaThresh   = 4.0f;
 static bool   compass_autoSave     = true;
 
+static bool   baro_enabled         = true;
+static float  baro_pressureOffsetHpa = 1013.25f;
+static float  baro_toleranceHpa    = 10.0f;
+static float  baro_altOffsetM      = 0.0f;
+
 
 static bool   sonar_enabled        = false;
 // Maximum range of the sonar in meters
@@ -53,7 +67,7 @@ static double  gps_homeLon         = 0.0;
 static float   gps_homeAlt         = 0.0f;
 
 static bool     rc_invertPWM         = false;
-static uint16_t rc_rssiMin         = 120;
+static uint16_t rc_rssiMin         = 0;
 static uint8_t  rc_thrChannel      = 2;
 static uint8_t  rc_rollChannel     = 0;
 static uint8_t  rc_pitchChannel    = 1;
@@ -81,6 +95,7 @@ static uint32_t ina219_maxAmps     = 30;
 static bool     ekf_enabled         = true;
 static float    ekf_innovGPS        = 5.0f;
 static float    ekf_innovMag        = 4.0f;
+static float    ekf_innovBaro       = 3.0f;
 static float    ekf_gyroNoiseSigma  = 0.000174f;
 static float    ekf_accelNoiseSigma = 0.01f;
 static float    ekf_minObsTime      = 2.0f;
@@ -153,7 +168,6 @@ static bool     misc_factoryReset  = false;
 //-----------------------------------------------------------------------------
 // Forward‐declarations for parsing helpers
 //-----------------------------------------------------------------------------
-static void    iniLoadDefaults(void);
 static bool    iniParseLine(char *line, char *currentSection);
 static void    trimWhitespace(char *s);
 static bool    startsWith(const char *s, const char *prefix);
@@ -212,6 +226,12 @@ bool Settings_Init(const char *ini_path) {
 //   • Rewrites the entire INI to 'ini_filepath' using FatFS f_open/f_puts/f_close.
 //-----------------------------------------------------------------------------
 bool Settings_Save(void) {
+    // Never perform FatFS I/O from interrupt context.
+    if (__get_IPSR() != 0U) {
+        Settings_RequestSave();
+        return false;
+    }
+
     FIL file;
     FRESULT fr;
     char buf[128];
@@ -234,6 +254,7 @@ bool Settings_Save(void) {
         f_puts("; Sections:\n", &file);
         f_puts(";   [IMU]           → Accelerometer & Gyro calibration offsets\n", &file);
         f_puts(";   [COMPASS]       → Magnetometer calibration & enabling\n", &file);
+        f_puts(";   [BARO]          → Barometer configuration\n", &file);
         f_puts(";   [SONAR]         → Rangefinder/sonar configuration\n", &file);
         f_puts(";   [GPS]           → GPS-related settings & thresholds\n", &file);
         f_puts(";   [RC]            → RC input mapping, RSSI thresholds, stick‐arming\n", &file);
@@ -296,6 +317,18 @@ bool Settings_Save(void) {
     f_puts("; If “compass_auto_save = 1”, any updated offsets from calibration tool\n", &file);
     f_puts("; will be saved here automatically.\n", &file);
     snprintf(buf, sizeof(buf), "compass_auto_save      = %d\n\n", compass_autoSave ? 1 : 0);
+    f_puts(buf, &file);
+
+    // -- [BARO] --
+    f_puts("[BARO]\n", &file);
+    f_puts("; --- Barometer (BMP388/BMP280 style) ---\n", &file);
+    snprintf(buf, sizeof(buf), "baro_enabled           = %d\n", baro_enabled ? 1 : 0);
+    f_puts(buf, &file);
+    snprintf(buf, sizeof(buf), "baro_pressure_offset   = %.6f\n", baro_pressureOffsetHpa);
+    f_puts(buf, &file);
+    snprintf(buf, sizeof(buf), "baro_tol_hpa           = %.6f\n", baro_toleranceHpa);
+    f_puts(buf, &file);
+    snprintf(buf, sizeof(buf), "baro_alt_offset        = %.6f\n\n", baro_altOffsetM);
     f_puts(buf, &file);
 
 
@@ -404,6 +437,8 @@ bool Settings_Save(void) {
     snprintf(buf, sizeof(buf), "ekf_innovation_gps         = %.6f\n", ekf_innovGPS);
     f_puts(buf, &file);
     snprintf(buf, sizeof(buf), "ekf_innovation_mag         = %.6f\n", ekf_innovMag);
+    f_puts(buf, &file);
+    snprintf(buf, sizeof(buf), "ekf_innovation_baro        = %.6f\n", ekf_innovBaro);
     f_puts(buf, &file);
     snprintf(buf, sizeof(buf), "ekf_gyro_noise_sigma       = %.6f\n", ekf_gyroNoiseSigma);
     f_puts(buf, &file);
@@ -588,7 +623,68 @@ bool Settings_Save(void) {
     f_puts(buf, &file);
 
     f_close(&file);
+    settings_last_success_ms = HAL_GetTick();
     return true;
+}
+
+void Settings_RequestSave(void)
+{
+    settings_save_requested = true;
+}
+
+void Settings_ProcessDeferredSave(uint32_t now_ms, bool allow_write)
+{
+    uint32_t retry_interval;
+
+    if (!settings_save_requested) {
+        return;
+    }
+    if (!allow_write) {
+        return;
+    }
+
+    retry_interval = settings_last_attempt_failed
+        ? SETTINGS_SAVE_RETRY_FAIL_MS
+        : SETTINGS_SAVE_RETRY_OK_MS;
+
+    if (settings_last_attempt_ms != 0U &&
+        (now_ms - settings_last_attempt_ms) < retry_interval) {
+        return;
+    }
+
+    settings_last_attempt_ms = now_ms;
+    if (Settings_Save()) {
+        settings_save_requested = false;
+        settings_last_attempt_failed = false;
+        settings_last_success_ms = now_ms;
+    } else {
+        settings_last_attempt_failed = true;
+    }
+}
+
+const char* Settings_GetIniPath(void)
+{
+    return ini_filepath;
+}
+
+bool Settings_IsSavePending(void)
+{
+    return settings_save_requested;
+}
+
+uint32_t Settings_GetLastSaveAttemptMs(void)
+{
+    return settings_last_attempt_ms;
+}
+
+bool Settings_GetLastSaveAttemptFailed(void)
+{
+    return settings_last_attempt_failed;
+}
+
+uint32_t Settings_GetLastSaveSuccessMs(void)
+{
+    return settings_last_success_ms;
 }
 
 //-----------------------------------------------------------------------------
@@ -709,6 +805,21 @@ static bool iniParseLine(char *line, char *currentSection) {
         }
         else if (startsWith(key, "compass_auto_save")) {
             compass_autoSave = (strtol(value, NULL, 10) != 0);
+        }
+        return true;
+    }
+    else if (strcmp(currentSection, "BARO") == 0) {
+        if (startsWith(key, "baro_enabled")) {
+            baro_enabled = (strtol(value, NULL, 10) != 0);
+        }
+        else if (startsWith(key, "baro_pressure_offset")) {
+            baro_pressureOffsetHpa = strtof(value, NULL);
+        }
+        else if (startsWith(key, "baro_tol_hpa")) {
+            baro_toleranceHpa = strtof(value, NULL);
+        }
+        else if (startsWith(key, "baro_alt_offset")) {
+            baro_altOffsetM = strtof(value, NULL);
         }
         return true;
     }
@@ -851,6 +962,9 @@ static bool iniParseLine(char *line, char *currentSection) {
         }
         else if (startsWith(key, "ekf_innovation_mag")) {
             ekf_innovMag = strtof(value, NULL);
+        }
+        else if (startsWith(key, "ekf_innovation_baro")) {
+            ekf_innovBaro = strtof(value, NULL);
         }
         else if (startsWith(key, "ekf_gyro_noise_sigma")) {
             ekf_gyroNoiseSigma = strtof(value, NULL);
@@ -1155,6 +1269,39 @@ void Settings_SetCompassAutoSave(bool on) {
     Settings_Save();
 }
 
+// [BARO]
+bool Settings_GetBaroEnabled(void) {
+    return baro_enabled;
+}
+void Settings_SetBaroEnabled(bool on) {
+    baro_enabled = on;
+    Settings_Save();
+}
+
+float Settings_GetBaroPressureOffsetHpa(void) {
+    return baro_pressureOffsetHpa;
+}
+void Settings_SetBaroPressureOffsetHpa(float v) {
+    baro_pressureOffsetHpa = v;
+    Settings_Save();
+}
+
+float Settings_GetBaroToleranceHpa(void) {
+    return baro_toleranceHpa;
+}
+void Settings_SetBaroToleranceHpa(float v) {
+    baro_toleranceHpa = v;
+    Settings_Save();
+}
+
+float Settings_GetBaroAltOffsetM(void) {
+    return baro_altOffsetM;
+}
+void Settings_SetBaroAltOffsetM(float v) {
+    baro_altOffsetM = v;
+    Settings_Save();
+}
+
 
 // [SONAR]
 bool Settings_GetSonarEnabled(void) {
@@ -1251,7 +1398,7 @@ double Settings_GetHomeLatitude(void) {
 }
 void Settings_SetHomeLatitude(double v) {
     gps_homeLat = v;
-    Settings_Save();
+    Settings_RequestSave();
 }
 
 double Settings_GetHomeLongitude(void) {
@@ -1259,7 +1406,7 @@ double Settings_GetHomeLongitude(void) {
 }
 void Settings_SetHomeLongitude(double v) {
     gps_homeLon = v;
-    Settings_Save();
+    Settings_RequestSave();
 }
 
 float Settings_GetHomeAltitude(void) {
@@ -1267,7 +1414,7 @@ float Settings_GetHomeAltitude(void) {
 }
 void Settings_SetHomeAltitude(float v) {
     gps_homeAlt = v;
-    Settings_Save();
+    Settings_RequestSave();
 }
 
 // [RC]
@@ -1486,6 +1633,14 @@ float Settings_GetEKFInnovationMag(void) {
 }
 void Settings_SetEKFInnovationMag(float v) {
     ekf_innovMag = v;
+    Settings_Save();
+}
+
+float Settings_GetEKFInnovationBaro(void) {
+    return ekf_innovBaro;
+}
+void Settings_SetEKFInnovationBaro(float v) {
+    ekf_innovBaro = v;
     Settings_Save();
 }
 

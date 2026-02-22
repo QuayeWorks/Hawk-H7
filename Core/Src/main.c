@@ -40,11 +40,14 @@
 #include "buzzer.h"
 #include "ekf.h"
 #include "sonar.h"
+#include "baro.h"
 #include "battery.h"
 #include "debug_menu.h"
+#include "sensor_diag.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <math.h>
 
 
@@ -60,6 +63,8 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
+#define BUZZER_ERROR_MIN_INTERVAL_MS 1000u
+#define GPS_DROPPED_BYTES_PER_200MS_THRESHOLD 8u
 
 /* USER CODE END PD */
 
@@ -124,6 +129,33 @@ static void DebugMsg(const char *msg)
     HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 }
 
+static uint32_t buzzerErrorLastMs[TONE_COUNT] = {0u};
+
+static void Buzzer_PlayErrorRateLimited(Buzzer_ToneID tone, uint32_t now_ms)
+{
+    if (tone >= TONE_COUNT) {
+        return;
+    }
+    if (buzzerErrorLastMs[tone] == 0u ||
+        (now_ms - buzzerErrorLastMs[tone]) >= BUZZER_ERROR_MIN_INTERVAL_MS) {
+        buzzerErrorLastMs[tone] = now_ms;
+        Buzzer_PlayTone(tone);
+    }
+}
+
+static volatile SensorRateReport g_sensorRates = {0};
+
+void SensorDiag_GetRates(SensorRateReport *out)
+{
+    if (out == NULL) {
+        return;
+    }
+
+    __disable_irq();
+    *out = g_sensorRates;
+    __enable_irq();
+}
+
 
 /* USER CODE END 0 */
 
@@ -153,13 +185,6 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  Buzzer_Config bzCfg = {
-      .htim    = &htim12,         // now use TIM12
-      .channel = TIM_CHANNEL_1,
-      .port    = NULL,			// not needed when using PWM
-      .pin     = 0
-  };
-  Buzzer_Init(&bzCfg);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -194,6 +219,13 @@ int main(void)
   MX_TIM12_Init();
   DebugMsg("TIM12 init done\r\n");
   /* USER CODE BEGIN 2 */
+  Buzzer_Config bzCfg = {
+      .htim    = &htim12,
+      .channel = TIM_CHANNEL_1,
+      .port    = NULL,  // PWM-only mode
+      .pin     = 0
+  };
+  Buzzer_Init(&bzCfg);
   Power_Init();
   DebugMsg("Power init done\r\n");
   // Link SD driver so that “0:” means the SD card
@@ -227,13 +259,19 @@ int main(void)
   DebugMsg("Sonar init done\r\n");
   Battery_Init(&hi2c1, &hadc3, Settings_GetINA219ShuntOhm());    // INA219 via I2C1 and ADC3 on PH2
   DebugMsg("Battery init done\r\n");
+  if (Settings_GetBaroEnabled()) {
+      Baro_Init(&hi2c1, 0u); // auto-probe 0x76/0x77 on I2C1
+      DebugMsg("Baro init done\r\n");
+  } else {
+      DebugMsg("Baro disabled in settings\r\n");
+  }
 
   EKF_Init();              // your EKF/UKF library initialization
   DebugMsg("EKF init done\r\n");
 
   DebugMenu_Init(&huart1);
   DebugMsg("Initialization complete\r\n");
-  DebugMenu_SetActionMask(DEBUG_MENU_PPM);
+  DebugMenu_SetActionMask(DEBUG_MENU_NONE);
 
   Motor_Init();      // ESC PWM outputs
   Servo_Init();
@@ -244,14 +282,12 @@ int main(void)
 #ifndef DEBUG_BYPASS_HEALTH
   // 4) Pre‐arm Calibration (Power ON → IMU level & bias)
 
-  // No barometer available
-
   //    This block runs only once at startup, before any arming is allowed.
   // Declare locals to hold the computed biases
   float imu_bx, imu_by, imu_bz;
 
   if (Settings_GetCalibrateOnBoot()) {
-          bool imu_ok = IMU_CalibrateOnBoot(
+          bool imu_ok = IMU_IsIdentityOK() && IMU_CalibrateOnBoot(
                           Settings_GetCalibSamples(),
                           Settings_GetAccelTolG(),
                           &imu_bx, &imu_by, &imu_bz);
@@ -263,16 +299,24 @@ int main(void)
       } else {
           FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
           // If you want an immediate failure tone:
-          Buzzer_PlayTone(TONE_ERROR_IMU);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_IMU, HAL_GetTick());
       }
   } else {
       // Skip calibration on boot; assume old biases from Settings are already correct
-      FlightState_SetHealth(FS_HEALTH_IMU_OK_BIT);
+      if (IMU_IsIdentityOK()) {
+          FlightState_SetHealth(FS_HEALTH_IMU_OK_BIT);
+      } else {
+          FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_IMU, HAL_GetTick());
+      }
   }
   DebugMsg("IMU calibration done\r\n");
 
   // 5) Load any compass offsets from settings
-  if (Settings_GetCompassEnabled()) {
+  if (Compass_IsStub()) {
+      FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
+      DebugMsg("Compass stub detected\r\n");
+  } else if (Settings_GetCompassEnabled()) {
       Compass_LoadCalibration(
           Settings_GetMagSoftIronX(),
           Settings_GetMagSoftIronY(),
@@ -294,11 +338,11 @@ int main(void)
     	          FlightState_SetHealth(FS_HEALTH_COMPASS_OK_BIT);
     	      } else {
     	          FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
-    	          Buzzer_PlayTone(TONE_ERROR_COMPASS);
+    	          Buzzer_PlayErrorRateLimited(TONE_ERROR_COMPASS, HAL_GetTick());
     	      }
       } else {
           FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_COMPASS);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_COMPASS, HAL_GetTick());
       }
   } else {
       // If the user disabled compass in settings, consider it “OK” by default
@@ -306,10 +350,44 @@ int main(void)
   }
   DebugMsg("Compass check done\r\n");
 
+  // 6) Barometer pre-check (if used)
+  if (Settings_GetBaroEnabled()) {
+      bool baro_ok = false;
+      uint32_t t0 = HAL_GetTick();
+      if (Baro_IsIdentityOK()) {
+          while ((HAL_GetTick() - t0) < 600U) {
+              uint32_t now_ms = HAL_GetTick();
+              float tolerance = Settings_GetBaroToleranceHpa();
+              float pressureRef = Settings_GetBaroPressureOffsetHpa();
+              if (Baro_Update(now_ms)) {
+                  EKF_PublishBaro(Baro_GetAltitudeMeters());
+                  if (tolerance <= 0.0f ||
+                      fabsf(Baro_GetPressureHpa() - pressureRef) <= tolerance) {
+                      baro_ok = true;
+                      break;
+                  }
+              }
+              HAL_Delay(20);
+          }
+      }
+
+      if (baro_ok) {
+          FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
+      } else {
+          FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_BARO, HAL_GetTick());
+      }
+  } else {
+      FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
+  }
+  DebugMsg("Barometer pre-check done\r\n");
+
 
 
   // 7) Sonar pre‐check (if used)
   if (Settings_GetSonarEnabled()) {
+      Sonar_TriggerAll();
+      HAL_Delay(60);
       bool anyOk = false;
       for (uint8_t idx = 0; idx < 3; idx++) {
           float sr = Sonar_ReadDistance(idx);
@@ -324,7 +402,7 @@ int main(void)
           FlightState_SetHealth(FS_HEALTH_SONAR_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_SONAR_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_SONAR);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_SONAR, HAL_GetTick());
       }
   } else {
       FlightState_SetHealth(FS_HEALTH_SONAR_OK_BIT);
@@ -337,6 +415,7 @@ int main(void)
       bool gps_ok = false;
       uint32_t t0 = HAL_GetTick();
       while ((HAL_GetTick() - t0) < (Settings_GetGPSRequiredTimeSec()*1000UL)) {
+          GPS_Update();
           if ((GPS_GetSatCount() >= Settings_GetGPSMinSatellites()) &&
               (GPS_GetHDOP() <= Settings_GetGPSMaxHDOP()) &&
               (GPS_CheckDriftOK(Settings_GetGPSHoldAfterLossSec()))) {
@@ -353,7 +432,7 @@ int main(void)
           Settings_SetHomeAltitude(GPS_GetAltitude());
       } else {
           FlightState_ClearHealth(FS_HEALTH_GPS_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_GPS);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_GPS, HAL_GetTick());
       }
   } else {
       FlightState_SetHealth(FS_HEALTH_GPS_OK_BIT);
@@ -364,17 +443,19 @@ int main(void)
   {
       // Example: RSSI read from ADC or UART, channel jitter from PPM input, sticks reading
       uint16_t rssi = RC_GetRSSI();
+      uint16_t rssiMin = Settings_GetRCRSSIMin();
+      bool rssi_ok = (rssiMin == 0U) || (rssi >= rssiMin);
       bool channels_ok = RC_AllChannelsStable();
       bool sticks_low_yaw_centered =
           (RC_GetChannel(Settings_GetRCThrottleChannel()) < Settings_GetRCArmStickThreshold()) &&
           (abs(RC_GetChannel(Settings_GetRCRollChannel()) - 1500) < Settings_GetRCCenterThreshold()) &&
           (abs(RC_GetChannel(Settings_GetRCYawChannel())  - 1500) < Settings_GetRCCenterThreshold());
 
-      if ((rssi >= Settings_GetRCRSSIMin()) && channels_ok && sticks_low_yaw_centered) {
+      if (rssi_ok && channels_ok && sticks_low_yaw_centered) {
           FlightState_SetHealth(FS_HEALTH_RC_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_RC_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_RC);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_RC, HAL_GetTick());
       }
     }
     DebugMsg("RC link pre-check done\r\n");
@@ -388,14 +469,14 @@ int main(void)
           FlightState_SetHealth(FS_HEALTH_BATT_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_BATTERY);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_BATTERY, HAL_GetTick());
       }
 
       if (perCell >= Settings_GetBatteryWarningVolts()) {
           FlightState_SetHealth(FS_HEALTH_BATT_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_BATTERY);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_BATTERY, HAL_GetTick());
       }
 
   }
@@ -430,6 +511,9 @@ int main(void)
       double lon = GPS_GetLongitude();
       float  alt = GPS_GetAltitude();
       EKF_PublishGPS(lat, lon, alt);
+      if (Settings_GetBaroEnabled() && Baro_HasSample()) {
+          EKF_PublishBaro(Baro_GetAltitudeMeters());
+      }
 
       EKF_UpdateSensors();
 
@@ -437,7 +521,7 @@ int main(void)
           FlightState_SetHealth(FS_HEALTH_EKF_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_EKF);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_EKF, HAL_GetTick());
       }
   }
   DebugMsg("EKF sensor publish done\r\n");
@@ -450,7 +534,7 @@ int main(void)
           FlightState_SetHealth(FS_HEALTH_EKF_OK_BIT);
       } else {
           FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
-          Buzzer_PlayTone(TONE_ERROR_EKF);
+          Buzzer_PlayErrorRateLimited(TONE_ERROR_EKF, HAL_GetTick());
       }
   }
   DebugMsg("EKF health pre-check done\r\n");
@@ -471,7 +555,7 @@ int main(void)
               // or you could lump it under a generic “motor health” flag. For now, we’ll
               // disarm immediately and treat it as a failsafe.
               FlightState_Disarm();
-              Buzzer_PlayTone(TONE_ERROR_MOTOR);
+              Buzzer_PlayErrorRateLimited(TONE_ERROR_MOTOR, HAL_GetTick());
           }
           Motor_SetPWM(i, pwmMin);  // set back to idle
           HAL_Delay(100);
@@ -531,18 +615,249 @@ int main(void)
   {
 
         uint32_t now = HAL_GetTick();
+    static uint32_t lastImuMs = 0;
+    static uint32_t lastMagMs = 0;
+    static uint32_t lastBaroMs = 0;
+    static uint32_t lastSonarMs = 0;
+    static uint32_t lastGpsMs = 0;
+    static uint32_t lastGpsParseMs = 0;
+    static uint32_t lastRcMs = 0;
+    static uint32_t lastBatteryMs = 0;
+    static uint32_t lastEkfMs = 0;
+    static uint32_t lastRatesMs = 0;
 
-	// ─── 1) Periodic Sonar Trigger (every 50 ms) ───
-    static uint32_t lastTrig = 0;
-    if (now - lastTrig >= 50) {
-        lastTrig = now;
-        Sonar_TriggerAll();
-        //DebugMsg("sonar trigger\r\n");
+    static uint32_t imuSamples = 0;
+    static uint32_t magSamples = 0;
+    static uint32_t baroSamples = 0;
+    static uint32_t sonarSamples = 0;
+    static uint32_t batterySamples = 0;
+    static uint32_t gpsCountPrev = 0;
+    static uint32_t gpsDropPrev = 0;
+    static uint32_t gpsOvfLastLogMs = 0;
+    static uint32_t rcFramePrev = 0;
+
+    // Dedicated sensor scheduler to avoid stale values and jittery reads.
+    if ((now - lastImuMs) >= 2U) { // 500 Hz
+        int16_t rawAx, rawAy, rawAz, rawGx, rawGy, rawGz;
+        lastImuMs = now;
+        if (!IMU_IsIdentityOK()) {
+            FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_IMU, now);
+        } else if (IMU_ReadRaw(&rawAx, &rawAy, &rawAz, &rawGx, &rawGy, &rawGz)) {
+            float ax, ay, az, gx, gy, gz;
+            IMU_GetAccelMps2(&ax, &ay, &az);
+            IMU_GetGyroDPS(&gx, &gy, &gz);
+            Attitude_Update(ax, ay, az, gx, gy, gz);
+            EKF_PublishIMU(ax, ay, az, gx, gy, gz);
+            imuSamples++;
+            if (IMU_CheckPlausibility()) {
+                FlightState_SetHealth(FS_HEALTH_IMU_OK_BIT);
+            } else {
+                FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_IMU, now);
+            }
+        } else {
+            FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_IMU, now);
+        }
     }
 
-	// a) Always run FlightState_Update() if any health bit might have changed:
+    if ((now - lastMagMs) >= 20U) { // 50 Hz
+        lastMagMs = now;
+        if (Compass_IsStub()) {
+            FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
+        } else if (Settings_GetCompassEnabled()) {
+            int16_t mx, my, mz;
+            if (Compass_ReadRaw(&mx, &my, &mz)) {
+                float mahaThresh = Settings_GetMagMahaThreshold();
+                if (Compass_CheckMahalanobis(mx, my, mz, mahaThresh)) {
+                    float heading = Compass_ComputeHeading(mx, my, mz);
+                    EKF_PublishMag(heading);
+                    magSamples++;
+                    FlightState_SetHealth(FS_HEALTH_COMPASS_OK_BIT);
+                } else {
+                    FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
+                    Buzzer_PlayErrorRateLimited(TONE_ERROR_COMPASS, now);
+                }
+            } else {
+                FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_COMPASS, now);
+            }
+        } else {
+            FlightState_SetHealth(FS_HEALTH_COMPASS_OK_BIT);
+        }
+    }
+
+    if ((now - lastBaroMs) >= 20U) { // 50 Hz
+        lastBaroMs = now;
+        if (Settings_GetBaroEnabled()) {
+            if (!Baro_IsIdentityOK()) {
+                FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_BARO, now);
+            } else if (Baro_Update(now)) {
+                float pressure = Baro_GetPressureHpa();
+                float pressureRef = Settings_GetBaroPressureOffsetHpa();
+                float pressureTol = Settings_GetBaroToleranceHpa();
+                bool pressureOk = (pressureTol <= 0.0f) ||
+                                  (fabsf(pressure - pressureRef) <= pressureTol);
+                EKF_PublishBaro(Baro_GetAltitudeMeters());
+                baroSamples++;
+                if (pressureOk) {
+                    FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
+                } else {
+                    FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
+                    Buzzer_PlayErrorRateLimited(TONE_ERROR_BARO, now);
+                }
+            } else {
+                FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_BARO, now);
+            }
+        } else {
+            FlightState_SetHealth(FS_HEALTH_BARO_OK_BIT);
+        }
+    }
+
+    if ((now - lastGpsParseMs) >= 2U) { // 500 Hz sentence parsing from RX ring buffer
+        lastGpsParseMs = now;
+        GPS_Update();
+    }
+
+    {
+        uint16_t sonarRateHz = Settings_GetSonarUpdateRateHz();
+        uint32_t sonarIntervalMs;
+        if (sonarRateHz == 0U) {
+            sonarRateHz = 10U;
+        }
+        sonarIntervalMs = 1000U / (uint32_t)sonarRateHz;
+        if (sonarIntervalMs == 0U) {
+            sonarIntervalMs = 1U;
+        }
+
+    if ((now - lastSonarMs) >= sonarIntervalMs) { // configurable, typically 10–20 Hz
+        lastSonarMs = now;
+        if (Settings_GetSonarEnabled()) {
+            bool anyOk = false;
+            Sonar_TriggerAll();
+            for (uint8_t idx = 0; idx < SONAR_COUNT; idx++) {
+                float d = Sonar_ReadDistance(idx);
+                if (d >= Settings_GetSonarMinDistance() &&
+                    d <= Settings_GetSonarMaxDistance()) {
+                    anyOk = true;
+                }
+            }
+            if (anyOk) {
+                FlightState_SetHealth(FS_HEALTH_SONAR_OK_BIT);
+                sonarSamples++;
+            } else {
+                FlightState_ClearHealth(FS_HEALTH_SONAR_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_SONAR, now);
+            }
+        } else {
+            FlightState_SetHealth(FS_HEALTH_SONAR_OK_BIT);
+        }
+    }
+    }
+
+    if ((now - lastGpsMs) >= 200U) { // 5 Hz GPS health gating (data parsed in main loop)
+        lastGpsMs = now;
+        if (Settings_GetGPSEnabled()) {
+            char gpsOvfMsg[32];
+            uint32_t gpsDropNow = GPS_GetDroppedByteCount();
+            uint32_t gpsDropDelta = gpsDropNow - gpsDropPrev;
+            bool gps_overflow_ok = (gpsDropDelta <= GPS_DROPPED_BYTES_PER_200MS_THRESHOLD);
+            gpsDropPrev = gpsDropNow;
+            if (!FlightState_IsArmed() &&
+                !gps_overflow_ok &&
+                ((now - gpsOvfLastLogMs) >= 1000U)) {
+                snprintf(gpsOvfMsg, sizeof(gpsOvfMsg), "GPS RX OVF d=%lu\r\n",
+                         (unsigned long)gpsDropDelta);
+                DebugMsg(gpsOvfMsg);
+                gpsOvfLastLogMs = now;
+            }
+            bool gps_ok = GPS_HasFix() &&
+                          (GPS_GetSatCount() >= Settings_GetGPSMinSatellites()) &&
+                          (GPS_GetHDOP() <= Settings_GetGPSMaxHDOP()) &&
+                          GPS_CheckDriftOK(Settings_GetGPSHoldAfterLossSec()) &&
+                          gps_overflow_ok;
+            if (gps_ok) {
+                FlightState_SetHealth(FS_HEALTH_GPS_OK_BIT);
+                EKF_PublishGPS(GPS_GetLatitude(), GPS_GetLongitude(), GPS_GetAltitude());
+            } else {
+                FlightState_ClearHealth(FS_HEALTH_GPS_OK_BIT);
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_GPS, now);
+            }
+        } else {
+            FlightState_SetHealth(FS_HEALTH_GPS_OK_BIT);
+        }
+    }
+
+    if ((now - lastRcMs) >= 10U) { // 100 Hz housekeeping, frames arrive on EXTI
+        uint16_t rssiMin;
+        bool rssi_low;
+        lastRcMs = now;
+        RC_Input_Update(now);
+        rssiMin = Settings_GetRCRSSIMin();
+        rssi_low = (rssiMin > 0U) && (RC_GetRSSI() < rssiMin);
+        if (RC_ChannelsAreStale(500U) || rssi_low) {
+            FlightState_ClearHealth(FS_HEALTH_RC_OK_BIT);
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_RC, now);
+        } else {
+            FlightState_SetHealth(FS_HEALTH_RC_OK_BIT);
+        }
+    }
+
+    if ((now - lastBatteryMs) >= 20U) { // 50 Hz
+        float perCell;
+        lastBatteryMs = now;
+        Battery_Tick(now);
+        batterySamples++;
+        perCell = Battery_ReadPerCellVoltage();
+        if (perCell >= Settings_GetBatteryWarningVolts()) {
+            FlightState_SetHealth(FS_HEALTH_BATT_OK_BIT);
+        } else {
+            FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
+            if (FlightState_IsArmed()) {
+                Buzzer_PlayTone(TONE_WARN_BATT_LOW);
+            }
+        }
+    }
+
+    if ((now - lastEkfMs) >= 5U) { // 200 Hz
+        lastEkfMs = now;
+        EKF_UpdateSensors();
+        if (EKF_AllInnovationGatesOK() && EKF_CovariancesConverged()) {
+            FlightState_SetHealth(FS_HEALTH_EKF_OK_BIT);
+        } else {
+            FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
+            if (FlightState_IsArmed()) {
+                Buzzer_PlayErrorRateLimited(TONE_ERROR_EKF, now);
+            }
+        }
+    }
+
+    if ((now - lastRatesMs) >= 1000U) {
+        uint32_t gpsCount = GPS_GetUpdateCount();
+        uint32_t rcFrames = RC_GetFrameCount();
+
+        g_sensorRates.imu_hz = (uint16_t)imuSamples;
+        g_sensorRates.mag_hz = (uint16_t)magSamples;
+        g_sensorRates.baro_hz = (uint16_t)baroSamples;
+        g_sensorRates.sonar_hz = (uint16_t)sonarSamples;
+        g_sensorRates.battery_hz = (uint16_t)batterySamples;
+        g_sensorRates.gps_hz = (uint16_t)(gpsCount - gpsCountPrev);
+        g_sensorRates.rc_hz = (uint16_t)(rcFrames - rcFramePrev);
+
+        imuSamples = 0;
+        magSamples = 0;
+        baroSamples = 0;
+        sonarSamples = 0;
+        batterySamples = 0;
+        gpsCountPrev = gpsCount;
+        rcFramePrev = rcFrames;
+        lastRatesMs = now;
+    }
+
     FlightState_Update();
-    //DebugMsg("flightstate updated\r\n");
 
     // b) If armed, start sending throttle to motors. Otherwise keep motors at idle:
     if (FlightState_IsArmed()) {
@@ -556,88 +871,27 @@ int main(void)
             Motor_SetPWM(i, Settings_GetMotorPWMMinUs());
         }
     }
-    //DebugMsg("throttle update done\r\n");
 
-    // c) Continually re‐check all health bits in flight:
-    //    (i) IMU plausibility—no clipping/stuck values
-    if (!IMU_CheckPlausibility()) {
-        FlightState_ClearHealth(FS_HEALTH_IMU_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_IMU);
-    }
-
-    //    (ii) Compass residuals
-    int16_t mx, my, mz;
-    if (Compass_ReadRaw(&mx, &my, &mz)) {
-        float mahaThresh = Settings_GetMagMahaThreshold();
-        if (!Compass_CheckMahalanobis(mx, my, mz, mahaThresh)) {
-            // magnetometer health has failed
-            FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
-            Buzzer_PlayTone(TONE_ERROR_COMPASS);
-        }
-    } else {
-        // read error
-        FlightState_ClearHealth(FS_HEALTH_COMPASS_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_COMPASS);
-    }
-
-    //    (iii) Altitude checks using GPS only
-    float gpsAlt  = GPS_GetAltitude();
-    float sonarAlt= Sonar_ReadDistance(0); // treat as altitude above ground
-
-    //    (iv) GPS: if fix drops below 4 satellites or HDOP > threshold
-    if (GPS_GetSatCount() < 4 || GPS_GetHDOP() > Settings_GetGPSMaxHDOP()) {
-        FlightState_ClearHealth(FS_HEALTH_GPS_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_GPS);
-    }
-
-    //    (v) RC link: if channels go stale (>0.5 s) or RSSI drops
-    if (RC_ChannelsAreStale(500) || (RC_GetRSSI() < Settings_GetRCRSSIMin())) {
-        FlightState_ClearHealth(FS_HEALTH_RC_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_RC);
-    }
-
-    //    (vi) Battery under load: measure under increased throttle
-    if (FlightState_IsArmed()) {
-        float perCell = Battery_ReadPackVoltage() / Settings_GetBatteryCellCount();
-        float remPerc = Battery_GetRemainingPercent();
-        if (perCell < Settings_GetBatteryCriticalVolts()) {
-            // Critically low ⇒ immediate land
-            FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
-            Buzzer_PlayTone(TONE_WARN_BATT_CRIT);
-            // You might trigger an auto‐land or RTL here—example:
-            CommenceAutoLand();
-        }
-        if (remPerc < 5.0f) {
-            Buzzer_PlayTone(TONE_WARN_BATT_CRIT);
-            CommenceAutoLand();
-        }
-        else if (perCell < Settings_GetBatteryWarningVolts()) {
-            // Warning threshold ⇒ set warning but still armed
-            Buzzer_PlayTone(TONE_WARN_BATT_LOW);
-            FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
-        } else {
-            FlightState_SetHealth(FS_HEALTH_BATT_OK_BIT);
+    // Additional plausibility check: if baro/gps altitude diverges too much, mark baro unhealthy.
+    if (Settings_GetBaroEnabled() && Baro_HasSample() && GPS_HasFix()) {
+        float altDelta = fabsf(Baro_GetAltitudeMeters() - GPS_GetAltitude());
+        if (altDelta > 80.0f) {
+            FlightState_ClearHealth(FS_HEALTH_BARO_OK_BIT);
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_BARO, now);
         }
     }
 
-    //    (vii) EKF innovations: if too many rejects, flag unhealthy
-    if (!EKF_AllInnovationGatesOK()) {
-        FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_EKF);
-    }
-
-    //    (viii) CPU & timing: if your IMU loop <1 kHz or attitude loop <200 Hz,
-    //    or if memory is tight, you could set a special health bit or
-    //    disarm right away:
+    // c) Continually re-check critical health bits in flight:
     if (!CPU_CheckTimingConstraints()) {
-        // For simplicity we treat this as an EKF failure
         FlightState_ClearHealth(FS_HEALTH_EKF_OK_BIT);
-        Buzzer_PlayTone(TONE_ERROR_CPU);
+        Buzzer_PlayErrorRateLimited(TONE_ERROR_CPU, now);
     }
-    //DebugMsg("health checks done\r\n");
 
     // 16) Failsafe checks (only run if armed)
     if (FlightState_IsArmed()) {
+        float navAlt;
+        uint16_t rcLossSec;
+
         // a) Attitude limits
         if (Attitude_GetTiltAngle() > Settings_GetMaxTiltDeg() ||
             Attitude_GetAngularRate() > Settings_GetMaxRollRateDPS()) {
@@ -645,11 +899,10 @@ int main(void)
             CommenceAutoLand();
         }
 
-        // b) Geofence
-        double lat = GPS_GetLatitude();
-        double lon = GPS_GetLongitude();
-        float  alt = GPS_GetAltitude();
-        if (Geofence_Breached(lat, lon, alt,
+        // b) Geofence (prefer baro altitude when healthy)
+        navAlt = (Settings_GetBaroEnabled() && Baro_IsHealthy()) ?
+                 Baro_GetAltitudeMeters() : GPS_GetAltitude();
+        if (Geofence_Breached(GPS_GetLatitude(), GPS_GetLongitude(), navAlt,
                               Settings_GetGeofenceCenterLat(),
                               Settings_GetGeofenceCenterLon(),
                               Settings_GetGeofenceCenterAlt(),
@@ -660,14 +913,18 @@ int main(void)
         }
 
         // c) RC/Telemetry link lost
-        if (RC_LinkLostForSeconds(Settings_GetFSRCLossDelaySec())) {
+        rcLossSec = (uint16_t)Settings_GetFSRCLossDelaySec();
+        if (rcLossSec == 0U) {
+            rcLossSec = 1U;
+        }
+        if (RC_LinkLostForSeconds(rcLossSec)) {
             Buzzer_PlayTone(TONE_WARN_RCLINK);
             CommenceAutoLand();  // or switch to Alt‐Hold
         }
 
-        // d) EKF fails mid‐flight
+        // d) EKF fails mid-flight
         if (!EKF_CovariancesConverged()) {
-            Buzzer_PlayTone(TONE_ERROR_EKF);
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_EKF, now);
             CommenceAutoLand();
         }
 
@@ -677,31 +934,57 @@ int main(void)
             CommenceAutoLand();
         }
 
-        // f) GPS drop
-        if (GPS_GetSatCount() < 4) {
-            Buzzer_PlayTone(TONE_ERROR_GPS);
+        // f) Battery under load
+        {
+            float perCell = Battery_ReadPerCellVoltage();
+            float remPerc = Battery_GetRemainingPercent();
+            if (perCell < Settings_GetBatteryCriticalVolts()) {
+                FlightState_ClearHealth(FS_HEALTH_BATT_OK_BIT);
+                Buzzer_PlayTone(TONE_WARN_BATT_CRIT);
+                CommenceAutoLand();
+            } else if (remPerc < 5.0f) {
+                Buzzer_PlayTone(TONE_WARN_BATT_CRIT);
+                CommenceAutoLand();
+            }
+        }
+
+        // g) If both GPS and baro are unavailable, hold mode fallback.
+        if (!GPS_HasFix() && !(Settings_GetBaroEnabled() && Baro_IsHealthy())) {
+            Buzzer_PlayErrorRateLimited(TONE_ERROR_GPS, now);
             CommenceAltHold();
         }
     }
-    //DebugMsg("failsafe checks done\r\n");
 
     // Update servos using RC channels and gimbal mode
     Servo_Task(DebugMenu_GetActionMask());
 
     // 17) Telemetry & LED updates
     if (Settings_GetTelemetryEnabled()) {
-        Telemetry_SendHealth(FlightState_GetStateMask());
-        Telemetry_SendAttitude(Attitude_GetAngles());
+        static uint32_t lastTelemetryMs = 0;
+        uint16_t rateHz = Settings_GetTelemetryStreamRateHz();
+        uint32_t intervalMs = (rateHz > 0U) ? (1000U / rateHz) : 0U;
+        if (rateHz > 0U && intervalMs == 0U) {
+            intervalMs = 1U;
+        }
+
+        if ((rateHz == 0U) || ((now - lastTelemetryMs) >= intervalMs)) {
+            Telemetry_SendHealth(FlightState_GetStateMask());
+            Telemetry_SendAttitude(Attitude_GetAngles());
+            lastTelemetryMs = now;
+        }
     }
     if (Settings_GetLEDEnabled()) {
         LED_UpdateStatus(FlightState_GetStateMask());
     }
     //DebugMsg("telemetry/LED done\r\n");
 
+    // Process deferred settings writes outside IRQ context (rate-limited in settings.c).
+    Settings_ProcessDeferredSave(now, !FlightState_IsArmed());
+
     // Sleep until next loop iteration (run at ~200 Hz for attitude, ~1 kHz for IMU)
     DebugMenu_Task();
     //DebugMsg("loop end\r\n");
-    HAL_Delay(1);  // crude ~200 Hz loop.  (Better: use a TIM interrupt at 200 Hz.)
+    HAL_Delay(1);  // crude scheduler base tick (~1 kHz loop cadence).
 
     /* USER CODE END WHILE */
 
@@ -1595,3 +1878,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+

@@ -23,7 +23,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "buzzer.h"    // for Buzzer_Tick()
-#include "battery.h"   // for Battery_Tick()
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -195,7 +194,6 @@ void SysTick_Handler(void)
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
   Buzzer_Tick();
-  Battery_Tick(HAL_GetTick());
   /* USER CODE END SysTick_IRQn 1 */
 }
 
