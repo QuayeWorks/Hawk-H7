@@ -227,16 +227,30 @@ int main(void)
   };
   Buzzer_Init(&bzCfg);
   Power_Init();
+  // Keep avionics rails enabled during bring-up so sensors on buck rails are powered.
+  Power_SetBuckEnable(0u, 1u);
+  Power_SetBuckEnable(1u, 1u);
+  Power_SetBuckEnable(2u, 1u);
+  Power_SetBuckEnable(3u, 1u);
+  HAL_Delay(20);
   DebugMsg("Power init done\r\n");
-  // Link SD driver so that “0:” means the SD card
-  FATFS_LinkDriver(&SD_Driver, SDPath);
+  // MX_FATFS_Init() already links SD_Driver to SDPath.
 
-  // Mount the file system on “0:”
-  FRESULT res = f_mount(&SDFatFS, SDPath, 1);
-  if (res != FR_OK) {
-      HAL_UART_Transmit(&huart1, (uint8_t*)"ERROR: f_mount failed.\r\n", 24, HAL_MAX_DELAY);
+  // Mount the SD card file system.
+  const char *sdPath = (SDPath[0] != '\0') ? SDPath : "0:/";
+  FRESULT res = f_mount(&SDFatFS, sdPath, 1);
+  if (res == FR_NOT_READY) {
+      HAL_Delay(50);
+      res = f_mount(&SDFatFS, sdPath, 1);
   }
-  else {
+  if (res != FR_OK) {
+      char mountMsg[48];
+      int mountLen = snprintf(mountMsg, sizeof(mountMsg),
+                              "ERROR: f_mount(%s) fr=%d\r\n", sdPath, (int)res);
+      if (mountLen > 0) {
+          HAL_UART_Transmit(&huart1, (uint8_t*)mountMsg, (uint16_t)mountLen, HAL_MAX_DELAY);
+      }
+  } else {
       // Now “0:/” is valid. Initialize settings (maybe creates file):
       if (!Settings_Init("0:/settings.ini")) {
           HAL_UART_Transmit(&huart1, (uint8_t*)"ERROR: Settings_Init failed.\r\n", 28, HAL_MAX_DELAY);
@@ -247,7 +261,18 @@ int main(void)
   }
 
   // 3) Initialize all sensor buses & devices
-  IMU_Init(&hi2c1);        // begin MPU6050 DMP or raw‐data streaming
+  IMU_Init(&hi2c1);        // begin MPU6050 DMP or raw-data streaming
+  if (!IMU_IsIdentityOK()) {
+      // Some builds wire IMU_EN active-low; try fallback polarity once.
+      HAL_GPIO_WritePin(MPU6050_EN_GPIO_Port, MPU6050_EN_Pin, GPIO_PIN_RESET);
+      HAL_Delay(20);
+      IMU_Init(&hi2c1);
+      if (!IMU_IsIdentityOK()) {
+          HAL_GPIO_WritePin(MPU6050_EN_GPIO_Port, MPU6050_EN_Pin, GPIO_PIN_SET);
+          HAL_Delay(20);
+          IMU_Init(&hi2c1);
+      }
+  }
   DebugMsg("IMU init done\r\n");
   Compass_Init(&hi2c1);    // memory magnetometer
   DebugMsg("Compass init done\r\n");
@@ -1748,7 +1773,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOF, TRIG1_Pin|TRIG2_Pin|TRIG3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4|HC_05_EN_Pin|MPU6050_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BMP388_I2C_EN_GPIO_Port, BMP388_I2C_EN_Pin|HC_05_EN_Pin|MPU6050_EN_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(BMP388_PWR_EN_GPIO_Port, BMP388_PWR_EN_Pin|QMC5883_PWR_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OSD_CS_GPIO_Port, OSD_CS_Pin, GPIO_PIN_RESET);
@@ -1781,15 +1809,21 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA4 HC_05_EN_Pin MPU6050_EN_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|HC_05_EN_Pin|MPU6050_EN_Pin;
+  /*Configure GPIO pins : BMP388_I2C_EN_Pin HC_05_EN_Pin MPU6050_EN_Pin */
+  GPIO_InitStruct.Pin = BMP388_I2C_EN_Pin|HC_05_EN_Pin|MPU6050_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(BMP388_I2C_EN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SDMMC_CD_Pin Motor_Swtich_1_Pin Motor_Switch_2_Pin */
-  GPIO_InitStruct.Pin = SDMMC_CD_Pin|Motor_Swtich_1_Pin|Motor_Switch_2_Pin;
+  /*Configure GPIO pin : SDMMC_CD_Pin */
+  GPIO_InitStruct.Pin = SDMMC_CD_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(SDMMC_CD_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Motor_Swtich_1_Pin Motor_Switch_2_Pin */
+  GPIO_InitStruct.Pin = Motor_Swtich_1_Pin|Motor_Switch_2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -1800,6 +1834,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(OSD_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BMP388_PWR_EN_Pin QMC5883_PWR_EN_Pin */
+  GPIO_InitStruct.Pin = BMP388_PWR_EN_Pin|QMC5883_PWR_EN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(BMP388_PWR_EN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : YAW_Buck_EN_Pin */
   GPIO_InitStruct.Pin = YAW_Buck_EN_Pin;

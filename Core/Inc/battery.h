@@ -37,7 +37,7 @@ void       Battery_Tick(uint32_t now_ms);
 /// Read the pack voltage (V), accounting for the hardware voltage divider from settings.
 float      Battery_ReadPackVoltage(void);
 
-/// Read current (A) as measured by INA219.
+/// Read total current (A) summed across detected INA219 sensors.
 float      Battery_ReadCurrent(void);
 
 /// Read per-cell voltage (V).
@@ -57,7 +57,15 @@ uint32_t   Battery_GetCurrentSampleCount(void);
 uint32_t   Battery_GetVoltageSampleCount(void);
 uint32_t   Battery_GetLastCurrentMs(void);
 uint32_t   Battery_GetLastVoltageMs(void);
+uint8_t    Battery_GetI2CAddress7bit(void);
 HAL_StatusTypeDef Battery_GetLastI2CStatus(void);
 HAL_StatusTypeDef Battery_GetLastADCStatus(void);
+
+// Multi-INA219 helpers (for per-rail telemetry/diagnostics).
+uint8_t    Battery_GetINA219Count(void);
+uint8_t    Battery_GetINA219Address7bitAt(uint8_t index);
+float      Battery_ReadCurrentAt(uint8_t index);
+float      Battery_GetLastCurrentAt(uint8_t index);
+HAL_StatusTypeDef Battery_GetLastI2CStatusAt(uint8_t index);
 
 #endif // BATTERY_H

@@ -148,6 +148,14 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+/* Sensor/module enable lines (from board schematic/.ioc labels) */
+#define BMP388_I2C_EN_Pin GPIO_PIN_4
+#define BMP388_I2C_EN_GPIO_Port GPIOA
+#define BMP388_PWR_EN_Pin GPIO_PIN_0
+#define BMP388_PWR_EN_GPIO_Port GPIOD
+#define QMC5883_PWR_EN_Pin GPIO_PIN_1
+#define QMC5883_PWR_EN_GPIO_Port GPIOD
+
 /* Define DEBUG_BYPASS_HEALTH to skip pre-arm health checks and run the
  * debug menu immediately. Enable via compiler flag or uncomment below. */
 /* #define DEBUG_BYPASS_HEALTH */

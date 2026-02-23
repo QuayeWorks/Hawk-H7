@@ -15,6 +15,7 @@
 #define IMU_I2C_TIMEOUT_MS 5u
 
 static I2C_HandleTypeDef *hi2c;
+static uint16_t imuAddr8bit = MPU6050_I2C_ADDR;
 static float accelBiasX, accelBiasY, accelBiasZ;
 static float gyroBiasX, gyroBiasY, gyroBiasZ;
 static int16_t lastRawAx, lastRawAy, lastRawAz;
@@ -25,6 +26,28 @@ static uint32_t imuReadOkCount;
 static uint32_t imuReadFailCount;
 static uint32_t imuLastReadMs;
 static HAL_StatusTypeDef imuLastHalStatus = HAL_OK;
+
+static bool IMU_ProbeAddress(uint16_t addr8bit)
+{
+    uint8_t who = 0u;
+
+    if (hi2c == NULL) {
+        return false;
+    }
+
+    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, addr8bit, MPU6050_WHO_AM_I, 1,
+                                        &who, 1, IMU_I2C_TIMEOUT_MS);
+    if (imuLastHalStatus != HAL_OK) {
+        return false;
+    }
+    if (who != 0x68u && who != 0x69u) {
+        return false;
+    }
+
+    imuWhoAmI = who;
+    imuAddr8bit = addr8bit;
+    return true;
+}
 
 void IMU_Init(I2C_HandleTypeDef *i2c_handle) {
     uint8_t pwr;
@@ -42,24 +65,20 @@ void IMU_Init(I2C_HandleTypeDef *i2c_handle) {
         return;
     }
 
-    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_WHO_AM_I, 1,
-                                        &imuWhoAmI, 1, 20);
-    if (imuLastHalStatus != HAL_OK) {
-        return;
-    }
-    if (imuWhoAmI != 0x68u && imuWhoAmI != 0x69u) {
+    if (!IMU_ProbeAddress((uint16_t)(0x68u << 1)) &&
+        !IMU_ProbeAddress((uint16_t)(0x69u << 1))) {
         return;
     }
     imuIdentityOk = true;
 
     // Wake up the MPU6050 (exit sleep)
     pwr = 0x00;
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_PWR_MGMT_1, 1, &pwr, 1, IMU_I2C_TIMEOUT_MS);
+    HAL_I2C_Mem_Write(hi2c, imuAddr8bit, MPU6050_PWR_MGMT_1, 1, &pwr, 1, IMU_I2C_TIMEOUT_MS);
     // Configure accel ±4g, gyro ±500°/s (for example)
     cfg = (0x01 << 3); // accel FS_SEL=1 (±4g)
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
+    HAL_I2C_Mem_Write(hi2c, imuAddr8bit, MPU6050_ACCEL_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
     cfg = (0x01 << 3); // gyro FS_SEL=1 (±500 °/s)
-    HAL_I2C_Mem_Write(hi2c, MPU6050_I2C_ADDR, MPU6050_GYRO_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
+    HAL_I2C_Mem_Write(hi2c, imuAddr8bit, MPU6050_GYRO_CONFIG, 1, &cfg, 1, IMU_I2C_TIMEOUT_MS);
 
     // Load any pre‐saved biases from settings.ini
     IMU_CalibrateOnBoot( (Settings_GetCalibrateOnBoot()? Settings_GetCalibSamples() : 0),
@@ -118,7 +137,7 @@ bool IMU_ReadRaw(int16_t *ax, int16_t *ay, int16_t *az,
         gx == NULL || gy == NULL || gz == NULL) {
         return false;
     }
-    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, MPU6050_I2C_ADDR, MPU6050_ACCEL_XOUT_H, 1, buf, 14, IMU_I2C_TIMEOUT_MS);
+    imuLastHalStatus = HAL_I2C_Mem_Read(hi2c, imuAddr8bit, MPU6050_ACCEL_XOUT_H, 1, buf, 14, IMU_I2C_TIMEOUT_MS);
     if (imuLastHalStatus != HAL_OK) {
         imuReadFailCount++;
         return false;

@@ -12,6 +12,7 @@
 #include "power.h"
 #include "flight_state.h"
 #include "settings.h"
+#include "main.h"
 
 static ADC_HandleTypeDef *hadcVolt;
 //static ADC_HandleTypeDef *hadcCurr;
@@ -25,15 +26,18 @@ static ADC_HandleTypeDef *hadcVolt;
 
 void Power_Init(void) {
 
-        /* Enable sensors using dedicated GPIO pins (ensure these match your schematic) */
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_15, GPIO_PIN_SET); // Enable MPU6050
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET); // Enable HC-05
+        /* Enable sensor power/control MOSFET lines by default. */
+        HAL_GPIO_WritePin(MPU6050_EN_GPIO_Port, MPU6050_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(HC_05_EN_GPIO_Port, HC_05_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BMP388_I2C_EN_GPIO_Port, BMP388_I2C_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BMP388_PWR_EN_GPIO_Port, BMP388_PWR_EN_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(QMC5883_PWR_EN_GPIO_Port, QMC5883_PWR_EN_Pin, GPIO_PIN_SET);
 
-	/* Initially Disable the buck converters using dedicated GPIO pins (ensure these match your schematic) */
-	HAL_GPIO_WritePin(GPIOI, GPIO_PIN_0, GPIO_PIN_RESET);  // buckID 0: OFF
-	HAL_GPIO_WritePin(GPIOG, GPIO_PIN_13, GPIO_PIN_RESET); // buckID 1: OFF
-	HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_RESET); // buckID 2: OFF
-	HAL_GPIO_WritePin(GPIOG, GPIO_PIN_15, GPIO_PIN_RESET); // buckID 3: OFF
+	/* Keep all buck converters ON by default. */
+	HAL_GPIO_WritePin(YAW_Buck_EN_GPIO_Port, YAW_Buck_EN_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(ARM_Buck_EN_GPIO_Port, ARM_Buck_EN_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(PITCH_Buck_EN_GPIO_Port, PITCH_Buck_EN_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(ROL_Buck_EN_GPIO_Port, ROL_Buck_EN_Pin, GPIO_PIN_SET);
 
 }
 
