@@ -206,7 +206,7 @@ GPS fix=3D sats=12 hdop=0.9 sps=5 drop=0 ring=12
 
 # Board Revision Compatibility
 
-| Feature | Rev-Old | Rev-New |
+| Feature | Rev-1.0A | Rev-1.1A |
 |----------|----------|----------|
 | HC-05 TX | PE8 | PB10 |
 | HC-05 RX | PE9 (firmware-disabled) | PB11 |
