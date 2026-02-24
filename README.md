@@ -1,115 +1,304 @@
-QuayeWorks Hawk-H7 Multicopter Flight Controller & AI Vision Board (Full Release 6-30-25)
-
 ![image](https://github.com/user-attachments/assets/4ce48747-8ada-4eb6-930e-fb27f005508e)
 ![image](https://github.com/user-attachments/assets/e76cfe3a-583a-495e-aa54-c03995705b6b)
 ![image](https://github.com/user-attachments/assets/37a7f0a2-3996-4085-a9fd-f79346cb6480)
 
-**Unlock Next-Level Drone Performance**
+# Hawk-H7 Flight Controller  
+### STM32H743 Multicopter Control Platform
 
-Take your drone projects from standard to exceptional with the QuayeWorks Hawk-H7. Specially engineered for quadcopters to octocopters, this advanced flight controller board delivers powerful stabilization, robust sensor integration, and built-in machine learning capabilities. Whether you’re designing for FPV racing, aerial photography, research, or autonomous flight, the Hawk-H7 is your versatile solution.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![MCU](https://img.shields.io/badge/MCU-STM32H743-03234B)
+![Core](https://img.shields.io/badge/Core-Cortex--M7-orange)
+![Status](https://img.shields.io/badge/Status-Active-green)
 
-**Key Features & Benefits:**
+---
 
-  **Advanced Flight Control:**
-  
-  - ARM Cortex®-M7 STM32H743 MCU (400 MHz) for unmatched real-time performance.
-    
-  - Supports precise stabilization and autonomous flight functions.
+## Overview
 
-  **Built-in AI & Machine Learning:**
-  
-  - On-board processing power for real-time object detection, recognition, and tracking (humans, vehicles, landmarks, etc.).
+The **Hawk-H7** is a high-performance STM32H743-based multicopter flight controller designed for deterministic real-time control, structured diagnostics, and robust sensor validation.
 
-  **Comprehensive FPV System:**
-  
-  - Integrated AT7456E On-Screen Display (OSD) with dedicated CN11/CN12 video input/output for telemetry overlays.
-    
-  - Seamless connection to external video transmitters.
+This project focuses on:
 
-  **Wireless Flexibility:**
-  
-  - Bluetooth (HC-05) enables remote tuning, camera/gimbal control, real-time telemetry, and wireless system configuration.
+- Deterministic scheduling (no blocking ISR logic)
+- Structured sensor health gating
+- Real, measurable diagnostics
+- Safe disarmed-only hardware testing
+- Transparent firmware behavior
 
-  **Robust Sensor Suite:**
-  
-  - MPU6050 IMU for accurate flight stabilization.
-    
-  - Memory-based magnetometer derived from the IMU for orientation.
-    
-  - INA219 voltage/current sensor ensures optimal power management.
-    
-  - GPS port for location tracking, waypoint navigation, and return-to-home.
-    
-  - Sonar port enabling collision avoidance, terrain-following, and safe landings.
+The Hawk-H7 supports quadcopters through octocopters and is intended for developers, researchers, and advanced builders who want full visibility and control over their flight stack.
 
-  **Smart Power Management:**
-  
-  - Efficient onboard buck converters and MOSFET power switching ensure battery efficiency and prolonged flight times.
-    
-  - USB power and integrated ST-Link debugger simplify development and testing.
-    
-  **Expandable & Versatile:**
-  
-  - Plenty of GPIO, SPI, UART, and I2C breakout headers for custom sensors, additional modules, and peripheral devices.
+---
 
-  **Technical Specifications:**
-  
-  - MCU: STM32H743 (ARM Cortex®-M7 at 400 MHz)
-    
-  - Debugger: STM32F103 integrated ST-Link
-    
-  - Wireless: HC-05 Bluetooth Module
-    
-  - Video OSD: AT7456E with dedicated Video In (CN11) and Video Out (CN12)
-    
-  - Sensors: MPU6050 (6-axis IMU), memory magnetometer, INA219 (Voltage/Current Monitor)
-    
-  - Additional Interfaces: MicroSD Card, GPS connector, Sonar connector, USB-to-Serial (CH340C)
-    
-  - Power Supply: Integrated DC-DC converters (3.3V, 5V), USB power option, MOSFET-controlled power rails
+# Hardware Overview
 
-  **Ideal Applications:**
-  
-  - FPV Drone Racing & Cinematic Aerial Videography
-    
-  - Research and Educational Platforms
-    
-  - Autonomous Navigation & Surveillance Drones
-    
-  - Object Detection & AI-driven Robotics
-    
-  - Advanced DIY Drone Enthusiasts
+## MCU
+- **STM32H743**
+- ARM Cortex-M7 @ 400 MHz
+- Hardware FPU
+- High-resolution PWM timers
+- Deterministic scheduler loop
 
-## GPS Setup
+## Integrated Debug
+- Onboard ST-Link (STM32F103)
+- USB programming support
+- UART console interface
 
-The UART used for GPS (USART6) defaults to **57600 bps**. If your GPS module
-operates at a different rate—such as the NEO‑6M running at 9600 bps—edit
-`settings.ini` and change the `gps_baud` value accordingly. The firmware
-initializes the UART using this setting during startup, so be sure it matches
-your module's configuration.
+## Major Interfaces
 
-Elevate your drone’s capabilities with the QuayeWorks Hawk-H7—where advanced flight control meets cutting-edge artificial intelligence.
+| Interface | Purpose |
+|------------|----------|
+| MPU6050 | 6-axis IMU |
+| QMC5883L | Magnetometer |
+| BMP/BME class | Barometer |
+| INA219 (0x40–0x4F) | Voltage/Current monitor |
+| USART6 | GPS |
+| Sonar port | Altitude assist |
+| AT7456E | OSD overlay |
+| HC-05 | Bluetooth telemetry |
 
-Disclaimer: The QuayeWorks Hawk-H7 hardware and software are intended solely for responsible and legal use. By using these materials, you agree that QuayeWorks (or the creator) shall not be held liable for any misuse, harm, or illegal activities involving this product. Users assume full responsibility for their actions and agree to comply with applicable laws and regulations.
+---
 
-MIT License
+# Firmware Architecture
 
+## Deterministic Scheduler
+
+| Module | Rate |
+|--------|------|
+| IMU | 500 Hz |
+| EKF | 200 Hz |
+| Barometer | 50 Hz |
+| GPS Parse | 500 Hz |
+| GPS Health | 5 Hz |
+| RC | 100 Hz |
+| Battery | 50 Hz |
+
+### Design Principles
+
+- No NMEA parsing inside UART interrupts
+- No SD card writes inside interrupt context
+- Bounded HAL timeouts (no infinite blocking)
+- Health bits tied to measurable sensor evidence
+
+---
+
+# Sensor Suite
+
+## IMU – MPU6050
+- WHO_AM_I identity verification
+- Plausibility validation
+- Read success/failure counters
+- Last HAL status reporting
+- Health bit integration
+
+## Barometer
+- Chip ID verification
+- Pressure sanity gating
+- IIR altitude filtering
+- Smoothed climb rate
+- Primary EKF vertical reference
+
+## Magnetometer – QMC5883L
+- Mahalanobis gating
+- Stub detection mode
+- Structured health reporting
+
+## GPS
+- Ring-buffered NMEA parsing
+- Sentence rate tracking (Hz)
+- Dropped byte detection
+- HDOP + satellite gating
+- Structured overflow warning:
+
+
+WARN code=GPS_RX_OVF delta=<n>
+
+
+## INA219 Power Monitoring
+- Scans I2C 0x40–0x4F
+- Supports up to 4 nodes
+- Sums current draw
+- Tracks I2C errors and ADC timeouts
+
+## Sonar
+- Trigger + echo edge counters
+- Timeout detection
+- Recency validation
+
+---
+
+# EKF & Vertical Fusion
+
+- Barometer is primary vertical reference
+- GPS altitude fused with lower gain
+- Innovation gating applied to baro and GPS
+- Vertical velocity bounded for stability
+- Health bits reflect real innovation limits
+
+---
+
+# Debug CLI v2
+
+The firmware includes a structured diagnostic command interface.
+
+## System Commands
+
+| Command | Description |
+|----------|--------------|
+| help | Show command groups |
+| status | One-line system state |
+| health | Health bit summary |
+| rates | Sensor update rates |
+| period <ms> | Set stream interval |
+| stop | Stop all streams/tests safely |
+
+---
+
+## Sensor Inspection
+
+| Command | Function |
+|----------|----------|
+| show \<module> | One-shot output |
+| show \<module> verbose | Extended counters |
+| stream \<module> on/off | Enable/disable stream |
+| stream all on/off | Toggle all streams |
+
+Modules:
+
+imu, baro, mag, ina, rc, gps, sonar, osd, sys
+
+
+---
+
+## Active Tests (Disarmed Only)
+
+| Command | Purpose |
+|----------|----------|
+| test active once | Active sensor validation |
+| test bus once | I2C scan |
+| test storage run | SD test |
+| test pwm start | Motor/servo sweep |
+| test pwm stop | Stop sweep |
+
+While armed:
+
+
+ERR code=ARMED_DIAGNOSTICS_LOCKED
+
+
+---
+
+## Output Format
+
+All runtime output follows:
+
+
+TAG key=value key=value ...
+
+
+Example:
+
+
+SYS state=READY armed=NO health_all=YES loop=198Hz
+IMU id=0x68 id_ok=YES read_ok=1520 fail=0 hal=OK
+GPS fix=3D sats=12 hdop=0.9 sps=5 drop=0 ring=12
+
+
+---
+
+# Board Revision Compatibility
+
+| Feature | Rev-Old | Rev-New |
+|----------|----------|----------|
+| HC-05 TX | PE8 | PB10 |
+| HC-05 RX | PE9 (firmware-disabled) | PB11 |
+| Bluetooth CLI RX | ❌ | ✔ |
+| Telemetry TX | ✔ | ✔ |
+
+### Legacy Boards
+
+Bluetooth is TX-only telemetry.  
+CLI commands cannot be sent over Bluetooth.
+
+---
+
+# RC Input
+
+Primary input:
+- **PPM on PF9** (EXTI timing capture)
+
+Fallback:
+- PWM1 input mode
+
+For FlySky FS-iA6B:
+- Enable receiver PPM mode.
+
+RC health includes:
+- Frame freshness
+- Stale detection
+- Optional RSSI gating
+
+---
+
+# Servo & PWM Test Procedure
+
+
+servo debug on
+
+
+Sequence:
+1. 2 seconds: PA0 + PA1 sweep forward
+2. 2 seconds: PA0 + PA1 sweep reverse
+3. Gimbal stabilization:
+   - PA2 = Pitch
+   - PA3 = Yaw
+
+Disarmed only.
+
+---
+
+# GPS Setup
+
+Default baud rate: **57600**
+
+For NEO-6M (9600):
+
+Edit `settings.ini`:
+
+
+gps_baud=9600
+
+
+Firmware reads baud at boot.
+
+---
+
+# Safety Model
+
+- Mutating diagnostics blocked while armed
+- CPU timing watchdog
+- GPS overflow detection
+- Innovation gating for sensors
+- Rate-limited error tones
+- Structured per-module health bits
+
+---
+
+# Applications
+
+- Research platforms
+- Custom autonomy development
+- Sensor fusion experimentation
+- Advanced DIY multicopter builds
+
+---
+
+# Disclaimer
+
+The Hawk-H7 hardware and firmware are intended for responsible and lawful use.  
+Users assume full responsibility for safe operation and regulatory compliance.
+
+---
+
+# License
+
+MIT License  
 Copyright (c) 2025 QuayeWorks
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
