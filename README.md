@@ -1,3 +1,7 @@
+# Hawk-H7 Flight Controller
+
+STM32H743-based flight controller firmware for multicopter platforms.
+
 ![image](https://github.com/user-attachments/assets/4ce48747-8ada-4eb6-930e-fb27f005508e)
 ![image](https://github.com/user-attachments/assets/e76cfe3a-583a-495e-aa54-c03995705b6b)
 ![image](https://github.com/user-attachments/assets/37a7f0a2-3996-4085-a9fd-f79346cb6480)
@@ -10,56 +14,54 @@
 ![Core](https://img.shields.io/badge/Core-Cortex--M7-orange)
 ![Status](https://img.shields.io/badge/Status-Active-green)
 
----
-
 ## Overview
 
-The **Hawk-H7** is a high-performance STM32H743-based multicopter flight controller designed for deterministic real-time control, structured diagnostics, and robust sensor validation.
+Hawk-H7 is a real-time flight control platform built around the STM32H743. It is designed for deterministic task scheduling, structured diagnostics, sensor validation, and safe hardware testing during development.
 
-This project focuses on:
+The project supports multicopter configurations from quadcopters through octocopters and is intended for developers who want direct visibility into system behavior instead of relying on a closed flight stack.
 
-- Deterministic scheduling (no blocking ISR logic)
-- Structured sensor health gating
-- Real, measurable diagnostics
-- Safe disarmed-only hardware testing
-- Transparent firmware behavior
+## Core Capabilities
 
-The Hawk-H7 supports quadcopters through octocopters and is intended for developers, researchers, and advanced builders who want full visibility and control over their flight stack.
+- Deterministic scheduler-based firmware architecture
+- Structured sensor health and identity validation
+- Non-blocking interrupt handling for time-critical paths
+- Disarmed-only active hardware test functions
+- Diagnostic CLI for runtime inspection and validation
+- Support for common navigation, power, telemetry, and altitude sensors
 
----
+## Hardware Platform
 
-# Hardware Overview
+### MCU
 
-## MCU
-- **STM32H743**
-- ARM Cortex-M7 @ 400 MHz
-- Hardware FPU
-- High-resolution PWM timers
-- Deterministic scheduler loop
+- STM32H743
+- ARM Cortex-M7 at 400 MHz
+- Hardware floating point unit
+- Timer-based PWM output support
 
-## Integrated Debug
-- Onboard ST-Link (STM32F103)
-- USB programming support
+### Debug and Programming
+
+- Onboard ST-Link
+- USB programming interface
 - UART console interface
 
-## Major Interfaces
+### Supported Interfaces
 
 | Interface | Purpose |
-|------------|----------|
-| MPU6050 | 6-axis IMU |
+|----------|---------|
+| MPU6050 | IMU |
 | QMC5883L | Magnetometer |
-| BMP/BME class | Barometer |
-| INA219 (0x40–0x4F) | Voltage/Current monitor |
+| BMP/BME-class devices | Barometer |
+| INA219 | Voltage and current monitoring |
 | USART6 | GPS |
 | Sonar port | Altitude assist |
-| AT7456E | OSD overlay |
+| AT7456E | OSD |
 | HC-05 | Bluetooth telemetry |
 
----
+## Firmware Architecture
 
-# Firmware Architecture
+The firmware uses a fixed-rate scheduler for time-sensitive subsystems and avoids placing slow or blocking work inside interrupt context.
 
-## Deterministic Scheduler
+### Task Rates
 
 | Module | Rate |
 |--------|------|
@@ -71,234 +73,199 @@ The Hawk-H7 supports quadcopters through octocopters and is intended for develop
 | RC | 100 Hz |
 | Battery | 50 Hz |
 
-### Design Principles
+### Design Rules
 
-- No NMEA parsing inside UART interrupts
+- No GPS parsing inside UART interrupts
 - No SD card writes inside interrupt context
-- Bounded HAL timeouts (no infinite blocking)
-- Health bits tied to measurable sensor evidence
+- No unbounded blocking timeouts
+- Health state is based on measurable sensor behavior
 
----
+## Sensor and System Monitoring
 
-# Sensor Suite
+### IMU
 
-## IMU – MPU6050
-- WHO_AM_I identity verification
-- Plausibility validation
-- Read success/failure counters
-- Last HAL status reporting
-- Health bit integration
+- WHO_AM_I verification
+- Read success and failure tracking
+- Plausibility checks
+- Health state integration
 
-## Barometer
+### Barometer
+
 - Chip ID verification
-- Pressure sanity gating
-- IIR altitude filtering
-- Smoothed climb rate
-- Primary EKF vertical reference
+- Pressure sanity checks
+- Filtered altitude estimate
+- Climb rate smoothing
+- EKF vertical reference input
 
-## Magnetometer – QMC5883L
-- Mahalanobis gating
-- Stub detection mode
+### Magnetometer
+
+- Mahalanobis-based gating
 - Structured health reporting
+- Stub detection support
 
-## GPS
+### GPS
+
 - Ring-buffered NMEA parsing
-- Sentence rate tracking (Hz)
+- Sentence rate tracking
 - Dropped byte detection
-- HDOP + satellite gating
-- Structured overflow warning:
+- HDOP and satellite-count gating
+- Overflow warning reporting
 
+### Power Monitoring
 
-WARN code=GPS_RX_OVF delta=<n>
+- INA219 scan support on I2C addresses `0x40–0x4F`
+- Multi-node current aggregation
+- I2C error and ADC timeout tracking
 
+### Sonar
 
-## INA219 Power Monitoring
-- Scans I2C 0x40–0x4F
-- Supports up to 4 nodes
-- Sums current draw
-- Tracks I2C errors and ADC timeouts
-
-## Sonar
-- Trigger + echo edge counters
+- Trigger and echo event counting
 - Timeout detection
-- Recency validation
+- Data recency validation
 
----
+## State Estimation
 
-# EKF & Vertical Fusion
+The EKF uses barometric altitude as the primary vertical reference and fuses GPS altitude with lower influence. Innovation checks are applied to both sources, and vertical velocity is bounded to improve stability and fault tolerance.
 
-- Barometer is primary vertical reference
-- GPS altitude fused with lower gain
-- Innovation gating applied to baro and GPS
-- Vertical velocity bounded for stability
-- Health bits reflect real innovation limits
+## Diagnostic CLI
 
----
+Hawk-H7 includes a command-line diagnostic interface for runtime inspection, health monitoring, and controlled hardware testing.
 
-# Debug CLI v2
-
-The firmware includes a structured diagnostic command interface.
-
-## System Commands
+### System Commands
 
 | Command | Description |
-|----------|--------------|
-| help | Show command groups |
-| status | One-line system state |
-| health | Health bit summary |
-| rates | Sensor update rates |
-| period <ms> | Set stream interval |
-| stop | Stop all streams/tests safely |
+|---------|-------------|
+| `help` | Show command groups |
+| `status` | Show one-line system state |
+| `health` | Show health bit summary |
+| `rates` | Show sensor update rates |
+| `period <ms>` | Set stream interval |
+| `stop` | Stop active streams and tests |
 
----
+### Sensor Inspection
 
-## Sensor Inspection
+| Command | Description |
+|---------|-------------|
+| `show <module>` | One-shot output |
+| `show <module> verbose` | Extended counters and details |
+| `stream <module> on/off` | Toggle module stream |
+| `stream all on/off` | Toggle all streams |
 
-| Command | Function |
-|----------|----------|
-| show \<module> | One-shot output |
-| show \<module> verbose | Extended counters |
-| stream \<module> on/off | Enable/disable stream |
-| stream all on/off | Toggle all streams |
+Supported modules:
 
-Modules:
+`imu`, `baro`, `mag`, `ina`, `rc`, `gps`, `sonar`, `osd`, `sys`
 
-imu, baro, mag, ina, rc, gps, sonar, osd, sys
+### Active Tests
 
+These functions are intended for disarmed development and bench validation only.
 
----
+| Command | Description |
+|---------|-------------|
+| `test active once` | Run active sensor validation |
+| `test bus once` | Run I2C scan |
+| `test storage run` | Run SD card test |
+| `test pwm start` | Start motor or servo sweep |
+| `test pwm stop` | Stop motor or servo sweep |
 
-## Active Tests (Disarmed Only)
+Mutating diagnostics are blocked while armed.
 
-| Command | Purpose |
-|----------|----------|
-| test active once | Active sensor validation |
-| test bus once | I2C scan |
-| test storage run | SD test |
-| test pwm start | Motor/servo sweep |
-| test pwm stop | Stop sweep |
+## Runtime Output Format
 
-While armed:
+Runtime messages follow a structured key-value format:
 
-
-ERR code=ARMED_DIAGNOSTICS_LOCKED
-
-
----
-
-## Output Format
-
-All runtime output follows:
-
-
+```text
 TAG key=value key=value ...
-
+```
 
 Example:
 
-
+```text
 SYS state=READY armed=NO health_all=YES loop=198Hz
 IMU id=0x68 id_ok=YES read_ok=1520 fail=0 hal=OK
 GPS fix=3D sats=12 hdop=0.9 sps=5 drop=0 ring=12
+```
 
-
----
-
-# Board Revision Compatibility
+## Board Revision Notes
 
 | Feature | Rev-1.0A | Rev-1.1A |
-|----------|----------|----------|
+|---------|----------|----------|
 | HC-05 TX | PE8 | PB10 |
-| HC-05 RX | PE9 (firmware-disabled) | PB11 |
-| Bluetooth CLI RX | ❌ | ✔ |
-| Telemetry TX | ✔ | ✔ |
+| HC-05 RX | PE9 (disabled in firmware) | PB11 |
+| Bluetooth CLI RX | No | Yes |
+| Telemetry TX | Yes | Yes |
 
-### Legacy Boards
+Legacy boards support Bluetooth telemetry transmit only. CLI input over Bluetooth is not available on those revisions.
 
-Bluetooth is TX-only telemetry.  
-CLI commands cannot be sent over Bluetooth.
-
----
-
-# RC Input
+## RC Input
 
 Primary input:
-- **PPM on PF9** (EXTI timing capture)
+
+- PPM on PF9 using EXTI timing capture
 
 Fallback:
+
 - PWM1 input mode
 
-For FlySky FS-iA6B:
-- Enable receiver PPM mode.
+For FlySky FS-iA6B receivers, enable PPM mode on the receiver.
 
-RC health includes:
-- Frame freshness
-- Stale detection
-- Optional RSSI gating
+RC health monitoring includes frame freshness, stale detection, and optional RSSI gating.
 
----
+## Servo and PWM Test
 
-# Servo & PWM Test Procedure
+Servo debug mode provides a basic staged sweep for output validation.
 
-
+```text
 servo debug on
-
+```
 
 Sequence:
-1. 2 seconds: PA0 + PA1 sweep forward
-2. 2 seconds: PA0 + PA1 sweep reverse
-3. Gimbal stabilization:
-   - PA2 = Pitch
-   - PA3 = Yaw
 
-Disarmed only.
+1. Two-second forward sweep on PA0 and PA1
+2. Two-second reverse sweep on PA0 and PA1
+3. Gimbal stabilization output on:
+   - PA2: Pitch
+   - PA3: Yaw
 
----
+Available only while disarmed.
 
-# GPS Setup
+## GPS Configuration
 
-Default baud rate: **57600**
+Default GPS baud rate is `57600`.
 
-For NEO-6M (9600):
+For modules configured at `9600` baud, update `settings.ini`:
 
-Edit `settings.ini`:
-
-
+```ini
 gps_baud=9600
+```
 
+The firmware reads this value at boot.
 
-Firmware reads baud at boot.
+## Safety
 
----
+The firmware includes several safeguards intended to reduce unsafe test behavior and improve fault visibility during development:
 
-# Safety Model
-
-- Mutating diagnostics blocked while armed
+- Diagnostics blocked while armed
 - CPU timing watchdog
 - GPS overflow detection
-- Innovation gating for sensors
+- Sensor innovation gating
 - Rate-limited error tones
-- Structured per-module health bits
+- Per-module health reporting
 
----
+## Intended Use
 
-# Applications
+Hawk-H7 is intended for:
 
+- Flight control development
+- Sensor fusion testing
 - Research platforms
-- Custom autonomy development
-- Sensor fusion experimentation
 - Advanced DIY multicopter builds
 
----
+## Disclaimer
 
-# Disclaimer
+This hardware and firmware are provided for lawful and responsible use. The user is responsible for safe operation, testing, and regulatory compliance.
 
-The Hawk-H7 hardware and firmware are intended for responsible and lawful use.  
-Users assume full responsibility for safe operation and regulatory compliance.
+## License
 
----
+MIT License
 
-# License
-
-MIT License  
 Copyright (c) 2025 QuayeWorks
