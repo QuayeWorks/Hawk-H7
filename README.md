@@ -14,255 +14,82 @@ STM32H743-based flight controller firmware for multicopter platforms.
 ![Core](https://img.shields.io/badge/Core-Cortex--M7-orange)
 ![Status](https://img.shields.io/badge/Status-Active-green)
 
+# Hawk-H7 Flight Controller
+
+A high-performance flight control platform built for stable flight, fast sensor fusion, and transparent real-time behavior.
+
 ## Overview
 
-Hawk-H7 is a real-time flight control platform built around the STM32H743. It is designed for deterministic task scheduling, structured diagnostics, sensor validation, and safe hardware testing during development.
+Hawk-H7 is a modern flight controller designed for multicopter platforms that need responsive control, dependable state estimation, and a firmware stack that is fully visible to the developer. It is built for teams and builders who want more than basic stabilization—they want a platform that can support serious tuning, testing, and expansion.
 
-The project supports multicopter configurations from quadcopters through octocopters and is intended for developers who want direct visibility into system behavior instead of relying on a closed flight stack.
+Unlike many closed or difficult-to-debug flight stacks, Hawk-H7 is designed around clear system behavior, structured diagnostics, and predictable control timing. The result is a platform that is easier to validate, easier to improve, and better suited for advanced development.
+
+## What Makes Hawk-H7 Different
+
+Hawk-H7 is not just another controller focused on basic flight. It is built to give operators and developers confidence in how the system behaves in real time.
+
+Key differentiators include:
+
+- Fast, deterministic flight control behavior
+- High-rate sensor fusion for stable attitude and altitude estimation
+- Structured diagnostics for faster troubleshooting and validation
+- Safer development workflow with protected test functions
+- Transparent firmware architecture instead of black-box behavior
+- Scalable design suitable for advanced custom drone platforms
 
 ## Core Capabilities
 
-- Deterministic scheduler-based firmware architecture
-- Structured sensor health and identity validation
-- Non-blocking interrupt handling for time-critical paths
-- Disarmed-only active hardware test functions
-- Diagnostic CLI for runtime inspection and validation
-- Support for common navigation, power, telemetry, and altitude sensors
+### Stable Flight Behavior
 
-## Hardware Platform
+Hawk-H7 is built to support smooth and controlled flight through fast sensor updates, consistent processing, and reliable state estimation. The platform is designed to reduce erratic behavior caused by delayed data handling or poorly structured control flow.
 
-### MCU
+### Sensor Fusion
 
-- STM32H743
-- ARM Cortex-M7 at 400 MHz
-- Hardware floating point unit
-- Timer-based PWM output support
+The controller combines data from multiple onboard sensors to improve attitude awareness, altitude tracking, and overall flight confidence. This helps create a more stable and usable platform for both manual flight and advanced development.
 
-### Debug and Programming
+### High-Speed Processing
 
-- Onboard ST-Link
-- USB programming interface
-- UART console interface
+The system is designed for rapid control updates and responsive decision-making. High processing speed improves the controller’s ability to react to changing flight conditions, maintain stability, and support more advanced features as the platform evolves.
 
-### Supported Interfaces
+### Real-Time Diagnostics
 
-| Interface | Purpose |
-|----------|---------|
-| MPU6050 | IMU |
-| QMC5883L | Magnetometer |
-| BMP/BME-class devices | Barometer |
-| INA219 | Voltage and current monitoring |
-| USART6 | GPS |
-| Sonar port | Altitude assist |
-| AT7456E | OSD |
-| HC-05 | Bluetooth telemetry |
+Hawk-H7 includes structured runtime reporting that makes it easier to monitor system health, validate sensor performance, and identify faults during development and testing.
 
-## Firmware Architecture
+### Development-Focused Safety
 
-The firmware uses a fixed-rate scheduler for time-sensitive subsystems and avoids placing slow or blocking work inside interrupt context.
+The platform includes safeguards that support bench testing and controlled validation without exposing the aircraft to unnecessary risk during development.
 
-### Task Rates
+## Performance-Oriented Design
 
-| Module | Rate |
-|--------|------|
-| IMU | 500 Hz |
-| EKF | 200 Hz |
-| Barometer | 50 Hz |
-| GPS Parse | 500 Hz |
-| GPS Health | 5 Hz |
-| RC | 100 Hz |
-| Battery | 50 Hz |
+Hawk-H7 was built with performance and reliability in mind. Its architecture supports:
 
-### Design Rules
+- Fast control response
+- Consistent update timing
+- Reliable sensor validation
+- Cleaner debugging and fault isolation
+- Better confidence during tuning and integration
 
-- No GPS parsing inside UART interrupts
-- No SD card writes inside interrupt context
-- No unbounded blocking timeouts
-- Health state is based on measurable sensor behavior
+This makes it a strong fit for builders who care about flight quality and for developers working on more advanced autonomy, navigation, or payload systems.
 
-## Sensor and System Monitoring
+## Ideal Use Cases
 
-### IMU
+Hawk-H7 is well suited for:
 
-- WHO_AM_I verification
-- Read success and failure tracking
-- Plausibility checks
-- Health state integration
+- Custom multicopter development
+- Advanced flight control experimentation
+- Research and test platforms
+- Sensor fusion and navigation projects
+- High-performance DIY drone builds
 
-### Barometer
+## Why It Matters
 
-- Chip ID verification
-- Pressure sanity checks
-- Filtered altitude estimate
-- Climb rate smoothing
-- EKF vertical reference input
+A flight controller should do more than keep a drone in the air. It should provide a stable foundation for everything built on top of it.
 
-### Magnetometer
-
-- Mahalanobis-based gating
-- Structured health reporting
-- Stub detection support
-
-### GPS
-
-- Ring-buffered NMEA parsing
-- Sentence rate tracking
-- Dropped byte detection
-- HDOP and satellite-count gating
-- Overflow warning reporting
-
-### Power Monitoring
-
-- INA219 scan support on I2C addresses `0x40–0x4F`
-- Multi-node current aggregation
-- I2C error and ADC timeout tracking
-
-### Sonar
-
-- Trigger and echo event counting
-- Timeout detection
-- Data recency validation
-
-## State Estimation
-
-The EKF uses barometric altitude as the primary vertical reference and fuses GPS altitude with lower influence. Innovation checks are applied to both sources, and vertical velocity is bounded to improve stability and fault tolerance.
-
-## Diagnostic CLI
-
-Hawk-H7 includes a command-line diagnostic interface for runtime inspection, health monitoring, and controlled hardware testing.
-
-### System Commands
-
-| Command | Description |
-|---------|-------------|
-| `help` | Show command groups |
-| `status` | Show one-line system state |
-| `health` | Show health bit summary |
-| `rates` | Show sensor update rates |
-| `period <ms>` | Set stream interval |
-| `stop` | Stop active streams and tests |
-
-### Sensor Inspection
-
-| Command | Description |
-|---------|-------------|
-| `show <module>` | One-shot output |
-| `show <module> verbose` | Extended counters and details |
-| `stream <module> on/off` | Toggle module stream |
-| `stream all on/off` | Toggle all streams |
-
-Supported modules:
-
-`imu`, `baro`, `mag`, `ina`, `rc`, `gps`, `sonar`, `osd`, `sys`
-
-### Active Tests
-
-These functions are intended for disarmed development and bench validation only.
-
-| Command | Description |
-|---------|-------------|
-| `test active once` | Run active sensor validation |
-| `test bus once` | Run I2C scan |
-| `test storage run` | Run SD card test |
-| `test pwm start` | Start motor or servo sweep |
-| `test pwm stop` | Stop motor or servo sweep |
-
-Mutating diagnostics are blocked while armed.
-
-## Runtime Output Format
-
-Runtime messages follow a structured key-value format:
-
-```text
-TAG key=value key=value ...
-```
-
-Example:
-
-```text
-SYS state=READY armed=NO health_all=YES loop=198Hz
-IMU id=0x68 id_ok=YES read_ok=1520 fail=0 hal=OK
-GPS fix=3D sats=12 hdop=0.9 sps=5 drop=0 ring=12
-```
-
-## Board Revision Notes
-
-| Feature | Rev-1.0A | Rev-1.1A |
-|---------|----------|----------|
-| HC-05 TX | PE8 | PB10 |
-| HC-05 RX | PE9 (disabled in firmware) | PB11 |
-| Bluetooth CLI RX | No | Yes |
-| Telemetry TX | Yes | Yes |
-
-Legacy boards support Bluetooth telemetry transmit only. CLI input over Bluetooth is not available on those revisions.
-
-## RC Input
-
-Primary input:
-
-- PPM on PF9 using EXTI timing capture
-
-Fallback:
-
-- PWM1 input mode
-
-For FlySky FS-iA6B receivers, enable PPM mode on the receiver.
-
-RC health monitoring includes frame freshness, stale detection, and optional RSSI gating.
-
-## Servo and PWM Test
-
-Servo debug mode provides a basic staged sweep for output validation.
-
-```text
-servo debug on
-```
-
-Sequence:
-
-1. Two-second forward sweep on PA0 and PA1
-2. Two-second reverse sweep on PA0 and PA1
-3. Gimbal stabilization output on:
-   - PA2: Pitch
-   - PA3: Yaw
-
-Available only while disarmed.
-
-## GPS Configuration
-
-Default GPS baud rate is `57600`.
-
-For modules configured at `9600` baud, update `settings.ini`:
-
-```ini
-gps_baud=9600
-```
-
-The firmware reads this value at boot.
-
-## Safety
-
-The firmware includes several safeguards intended to reduce unsafe test behavior and improve fault visibility during development:
-
-- Diagnostics blocked while armed
-- CPU timing watchdog
-- GPS overflow detection
-- Sensor innovation gating
-- Rate-limited error tones
-- Per-module health reporting
-
-## Intended Use
-
-Hawk-H7 is intended for:
-
-- Flight control development
-- Sensor fusion testing
-- Research platforms
-- Advanced DIY multicopter builds
+Hawk-H7 is designed to deliver that foundation by combining fast control behavior, modern sensor fusion, and a development process centered around visibility and control. For teams building beyond entry-level hobby platforms, that matters.
 
 ## Disclaimer
 
-This hardware and firmware are provided for lawful and responsible use. The user is responsible for safe operation, testing, and regulatory compliance.
+This project is intended for responsible and lawful use. Safe integration, testing, and operation remain the responsibility of the user.
 
 ## License
 
